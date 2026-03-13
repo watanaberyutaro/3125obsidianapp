@@ -1,44 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as line from "@line/bot-sdk";
+import crypto from "crypto";
 import { processMessage } from "../../../lib/secretary";
 
-const config = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN!,
-  channelSecret: process.env.LINE_CHANNEL_SECRET!,
-};
+// LINE署名検証（@line/bot-sdk不使用）
+function validateSignature(body: string, secret: string, signature: string): boolean {
+  const hash = crypto.createHmac("sha256", secret).update(body).digest("base64");
+  return hash === signature;
+}
+
+// LINEへの返信
+async function replyMessage(replyToken: string, text: string, accessToken: string) {
+  await fetch("https://api.line.me/v2/bot/message/reply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [{ type: "text", text }],
+    }),
+  });
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const signature = req.headers.get("x-line-signature") || "";
+  const secret = process.env.LINE_CHANNEL_SECRET!;
+  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN!;
 
-  // 署名検証
-  if (!line.validateSignature(body, config.channelSecret, signature)) {
+  if (!validateSignature(body, secret, signature)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  const events: line.WebhookEvent[] = JSON.parse(body).events;
-  const client = new line.messagingApi.MessagingApiClient(config);
+  const events = JSON.parse(body).events;
 
   for (const event of events) {
     if (event.type !== "message" || event.message.type !== "text") continue;
 
-    const userMessage = event.message.text;
-    const replyToken = event.replyToken;
+    const userMessage: string = event.message.text;
+    const replyToken: string = event.replyToken;
 
     try {
-      // 秘書が処理
       const reply = await processMessage(userMessage);
-
-      await client.replyMessage({
-        replyToken,
-        messages: [{ type: "text", text: reply }],
-      });
+      await replyMessage(replyToken, reply, accessToken);
     } catch (err) {
       console.error(err);
-      await client.replyMessage({
-        replyToken,
-        messages: [{ type: "text", text: "申し訳ありません。処理中にエラーが発生しました。" }],
-      });
+      await replyMessage(replyToken, "申し訳ありません。処理中にエラーが発生しました。", accessToken);
     }
   }
 
