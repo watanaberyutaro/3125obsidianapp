@@ -277,7 +277,7 @@ source: WebUI
     const titleMatch = content.match(/^# 💡 (.+)$/m);
     const title = titleMatch ? titleMatch[1].replace(/[/\\:*?"<>|]/g, "-") : "アイデア";
     await ghPut(`3125企画開発事業部/${todayISO}-${title}.md`, content);
-    return { text: "完了しました✓", action: "saved" };
+    return { text: "完了しました✓", actions: ["saved"] };
   }
 
   if (intent === "memo") {
@@ -294,7 +294,7 @@ source: WebUI
     const titleMatch = content.match(/^# (.+)$/m);
     const title = titleMatch ? titleMatch[1].replace(/[/\\:*?"<>|]/g, "-") : "メモ";
     await ghPut(`3125情報受付事業部/${todayISO}-${title}.md`, content);
-    return { text: "完了しました✓", action: "saved" };
+    return { text: "完了しました✓", actions: ["saved"] };
   }
 
   return null;
