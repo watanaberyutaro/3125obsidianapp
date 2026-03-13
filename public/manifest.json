@@ -1,0 +1,20 @@
+{
+  "name": "渡邊カンパニー 秘書室",
+  "short_name": "秘書室",
+  "description": "渡邊カンパニー AIエージェント",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f0f0f",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "lang": "ja"
+}

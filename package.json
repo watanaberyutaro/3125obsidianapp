@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "echo 'no build needed'"
+    "build": "echo 'no build needed'",
+    "generate-vapid": "node scripts/generate-vapid.js"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
   }
 }

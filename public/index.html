@@ -3,6 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="秘書室">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon.svg">
   <title>渡邊カンパニー 秘書室</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -17,7 +23,8 @@
     }
 
     header {
-      padding: 16px 20px;
+      padding: 12px 20px;
+      padding-top: max(12px, env(safe-area-inset-top));
       background: #1a1a1a;
       border-bottom: 1px solid #2a2a2a;
       display: flex;
@@ -30,17 +37,53 @@
       background: linear-gradient(135deg, #6366f1, #8b5cf6);
       border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      font-size: 16px;
+      font-size: 16px; font-weight: bold;
     }
 
     header h1 { font-size: 16px; font-weight: 600; }
     header p { font-size: 11px; color: #666; }
 
+    .header-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
     .status-dot {
       width: 8px; height: 8px;
       background: #22c55e;
       border-radius: 50%;
-      margin-left: auto;
+    }
+
+    #notifBtn {
+      background: none;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      color: #888;
+      font-size: 18px;
+      width: 34px; height: 34px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+      transition: all 0.2s;
+    }
+
+    #notifBtn:hover { border-color: #6366f1; color: #a5b4fc; }
+    #notifBtn.active { border-color: #6366f1; color: #6366f1; background: #1e1b4b; }
+
+    #badgeCount {
+      position: absolute;
+      top: -6px; right: -6px;
+      background: #ef4444;
+      color: white;
+      font-size: 10px;
+      font-weight: bold;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
     }
 
     #messages {
@@ -131,6 +174,7 @@
 
     .input-area {
       padding: 12px 16px;
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
       background: #1a1a1a;
       border-top: 1px solid #2a2a2a;
       display: flex;
@@ -157,7 +201,7 @@
     textarea:focus { border-color: #6366f1; }
     textarea::placeholder { color: #555; }
 
-    button {
+    #sendBtn {
       width: 40px; height: 40px;
       background: #6366f1;
       border: none;
@@ -168,11 +212,10 @@
       transition: background 0.2s, transform 0.1s;
     }
 
-    button:hover { background: #5558e8; }
-    button:active { transform: scale(0.95); }
-    button:disabled { background: #3a3a3a; cursor: not-allowed; }
-
-    button svg { width: 18px; height: 18px; fill: white; }
+    #sendBtn:hover { background: #5558e8; }
+    #sendBtn:active { transform: scale(0.95); }
+    #sendBtn:disabled { background: #3a3a3a; cursor: not-allowed; }
+    #sendBtn svg { width: 18px; height: 18px; fill: white; }
 
     .welcome {
       text-align: center;
@@ -206,6 +249,39 @@
     }
 
     .suggestion:hover { border-color: #6366f1; color: #a5b4fc; }
+
+    /* インストールバナー */
+    #installBanner {
+      display: none;
+      background: #1e1b4b;
+      border-bottom: 1px solid #3730a3;
+      padding: 10px 16px;
+      font-size: 13px;
+      color: #a5b4fc;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #installBanner button {
+      margin-left: auto;
+      background: #6366f1;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      padding: 6px 14px;
+      font-size: 12px;
+      cursor: pointer;
+      width: auto; height: auto;
+      border-radius: 8px;
+    }
+
+    #dismissInstall {
+      background: none !important;
+      color: #555 !important;
+      padding: 4px !important;
+      font-size: 18px !important;
+      line-height: 1;
+    }
   </style>
 </head>
 <body>
@@ -215,8 +291,20 @@
       <h1>渡邊カンパニー 秘書室</h1>
       <p>AIエージェント</p>
     </div>
-    <div class="status-dot"></div>
+    <div class="header-actions">
+      <button id="notifBtn" onclick="toggleNotifications()" title="通知設定">
+        🔔
+        <div id="badgeCount"></div>
+      </button>
+      <div class="status-dot"></div>
+    </div>
   </header>
+
+  <div id="installBanner">
+    📲 ホーム画面に追加してアプリとして使えます
+    <button onclick="installApp()">追加</button>
+    <button id="dismissInstall" onclick="dismissInstall()">✕</button>
+  </div>
 
   <div id="messages">
     <div class="welcome">
@@ -245,7 +333,137 @@
     const messages = document.getElementById('messages');
     const sendBtn = document.getElementById('sendBtn');
     let isFirstMessage = true;
+    let badgeCount = 0;
+    let deferredPrompt = null;
+    let swRegistration = null;
 
+    // Service Worker登録
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        swRegistration = reg;
+        console.log('SW registered');
+      });
+    }
+
+    // PWAインストールプロンプト
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (!localStorage.getItem('installDismissed')) {
+        document.getElementById('installBanner').style.display = 'flex';
+      }
+    });
+
+    async function installApp() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      document.getElementById('installBanner').style.display = 'none';
+    }
+
+    function dismissInstall() {
+      localStorage.setItem('installDismissed', '1');
+      document.getElementById('installBanner').style.display = 'none';
+    }
+
+    // アプリ開いた時にバッジをクリア
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) clearBadge();
+    });
+
+    function clearBadge() {
+      badgeCount = 0;
+      document.getElementById('badgeCount').style.display = 'none';
+      if ('clearAppBadge' in navigator) navigator.clearAppBadge();
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_BADGE' });
+      }
+    }
+
+    function incrementBadge() {
+      badgeCount++;
+      const el = document.getElementById('badgeCount');
+      el.textContent = badgeCount;
+      el.style.display = 'flex';
+      if ('setAppBadge' in navigator) navigator.setAppBadge(badgeCount);
+    }
+
+    // Push通知の有効化/無効化
+    async function toggleNotifications() {
+      const btn = document.getElementById('notifBtn');
+
+      if (!('Notification' in window) || !swRegistration) {
+        alert('このブラウザはPush通知に対応していません');
+        return;
+      }
+
+      if (Notification.permission === 'granted') {
+        // 既に有効 → 無効化
+        const sub = await swRegistration.pushManager.getSubscription();
+        if (sub) await sub.unsubscribe();
+        btn.classList.remove('active');
+        btn.title = '通知をオンにする';
+        return;
+      }
+
+      // 通知許可を要求
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        alert('通知が許可されませんでした');
+        return;
+      }
+
+      await subscribePush();
+    }
+
+    async function subscribePush() {
+      const btn = document.getElementById('notifBtn');
+      try {
+        // VAPID公開鍵を取得
+        const res = await fetch('/api/vapid-public-key');
+        const { publicKey } = await res.json();
+
+        const sub = await swRegistration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey)
+        });
+
+        // subscriptionをサーバーに送信
+        await fetch('/api/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sub)
+        });
+
+        btn.classList.add('active');
+        btn.title = '通知をオフにする';
+        console.log('Push通知を有効化しました');
+      } catch (err) {
+        console.error('Push登録エラー:', err);
+        alert('通知の設定に失敗しました');
+      }
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+    }
+
+    // 通知状態を確認
+    async function checkNotificationStatus() {
+      if (!('Notification' in window) || !swRegistration) return;
+      if (Notification.permission === 'granted') {
+        const sub = await swRegistration.pushManager.getSubscription();
+        if (sub) document.getElementById('notifBtn').classList.add('active');
+      }
+    }
+
+    setTimeout(checkNotificationStatus, 1000);
+
+    // チャット機能
     input.addEventListener('input', () => {
       input.style.height = 'auto';
       input.style.height = Math.min(input.scrollHeight, 120) + 'px';
@@ -291,7 +509,9 @@
 
       messages.appendChild(div);
       messages.scrollTop = messages.scrollHeight;
-      return div;
+
+      // バックグラウンド時はバッジを増やす
+      if (role === 'assistant' && document.hidden) incrementBadge();
     }
 
     function showTyping() {
