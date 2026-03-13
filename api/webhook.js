@@ -44,7 +44,9 @@ async function callClaude(userMessage) {
 5. 雑談・相談 → そのまま返答
 
 アクションが必要な場合は返答の末尾に以下のJSONを含めてください：
-<action>{"type":"save_idea"|"save_research"|"save_memo"|"add_calendar","title":"タイトル","content":"内容"}</action>
+<action>{"type":"save_idea"|"save_research"|"save_memo"|"add_calendar","title":"タイトル","content":"内容","datetime":"YYYY-MM-DDTHH:MM:SS"}</action>
+
+add_calendarの場合、datetimeは必須です。ユーザーが日時を指定した場合はその日時をISO8601形式で入れてください。今日の日付は${new Date().toLocaleDateString("ja-JP",{timeZone:"Asia/Tokyo"})}です。時刻のみの指定（例:21時）は今日の日付と組み合わせてください。
 
 口調：丁寧だが親しみやすく。何をしたか簡潔に報告する。`,
       messages: [{ role: "user", content: userMessage }],
@@ -95,10 +97,10 @@ async function saveToObsidian(filePath, content) {
 }
 
 // Googleカレンダーに予定を追加
-async function addCalendarEvent(title, description) {
+async function addCalendarEvent(title, description, datetime) {
   try {
     const token = await getGoogleToken();
-    const startTime = new Date(Date.now() + 10 * 60 * 1000);
+    const startTime = datetime ? new Date(datetime) : new Date(Date.now() + 10 * 60 * 1000);
     const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
     const calendarId = encodeURIComponent(process.env.GOOGLE_CALENDAR_ID);
 
@@ -201,7 +203,7 @@ module.exports = async (req, res) => {
             `---\ncreated: ${today}\nsource: LINE\n---\n\n# ${action.title}\n\n${action.content}\n`
           );
         } else if (action.type === "add_calendar") {
-          await addCalendarEvent(action.title, action.content);
+          await addCalendarEvent(action.title, action.content, action.datetime);
         }
       }
 
