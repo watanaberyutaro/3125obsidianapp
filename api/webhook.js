@@ -131,9 +131,10 @@ async function getGoogleToken() {
     iat: now,
   })).toString("base64url");
 
+  const keyObject = crypto.createPrivateKey({ key: privateKey, format: "pem", type: "pkcs8" });
   const sign = crypto.createSign("RSA-SHA256");
   sign.update(`${header}.${payload}`);
-  const sig = sign.sign(privateKey, "base64url");
+  const sig = sign.sign(keyObject, "base64url");
 
   const jwt = `${header}.${payload}.${sig}`;
   const res = await fetch("https://oauth2.googleapis.com/token", {
