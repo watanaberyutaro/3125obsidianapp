@@ -109,7 +109,11 @@ async function saveToObsidian(filePath, content) {
 async function addCalendarEvent(title, description, datetime) {
   try {
     const token = await getGoogleToken();
-    const startTime = datetime ? new Date(datetime) : new Date(Date.now() + 10 * 60 * 1000);
+    const startTime = (() => {
+      if (!datetime) return new Date(Date.now() + 10 * 60 * 1000);
+      if (!datetime.includes("+") && !datetime.includes("Z")) return new Date(datetime + "+09:00");
+      return new Date(datetime);
+    })();
     const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
     const calendarId = encodeURIComponent(process.env.GOOGLE_CALENDAR_ID);
 

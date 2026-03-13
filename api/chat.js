@@ -84,9 +84,18 @@ async function saveToObsidian(filePath, content) {
   });
 }
 
+function toJSTDate(datetime) {
+  if (!datetime) return new Date(Date.now() + 10 * 60 * 1000);
+  // タイムゾーン指定がない場合はJST（+09:00）として解釈
+  if (!datetime.includes("+") && !datetime.includes("Z")) {
+    return new Date(datetime + "+09:00");
+  }
+  return new Date(datetime);
+}
+
 async function addCalendarEvent(title, description, datetime) {
   const token = await getGoogleToken();
-  const startTime = datetime ? new Date(datetime) : new Date(Date.now() + 10 * 60 * 1000);
+  const startTime = toJSTDate(datetime);
   const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
   const calendarId = encodeURIComponent(process.env.GOOGLE_CALENDAR_ID);
 

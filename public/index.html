@@ -322,7 +322,7 @@
   </div>
 
   <div class="input-area">
-    <textarea id="input" placeholder="指示を入力..." rows="1"></textarea>
+    <textarea id="input" placeholder="指示を入力（Shift+Enterで送信）..." rows="1"></textarea>
     <button id="sendBtn" onclick="send()">
       <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
     </button>
@@ -470,7 +470,8 @@
     });
 
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      // Shift+Enter または Ctrl+Enter で送信、Enter単体は改行
+      if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         send();
       }
