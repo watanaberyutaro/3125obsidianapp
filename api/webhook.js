@@ -120,11 +120,16 @@ async function addCalendarEvent(title, description) {
 async function getGoogleToken() {
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
   const rawKey = process.env.GOOGLE_PRIVATE_KEY || "";
-  console.log("KEY_LENGTH:", rawKey.length);
-  console.log("HAS_LITERAL_SLASH_N:", rawKey.includes("\\n"));
-  console.log("HAS_NEWLINE:", rawKey.includes("\n"));
-  console.log("KEY_START:", rawKey.substring(0, 40));
-  const privateKey = rawKey.replace(/\\n/g, "\n");
+  // PEMヘッダー・フッターを除いたbase64のみ抽出して再構築
+  const base64 = rawKey
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\\n/g, "")
+    .replace(/\n/g, "")
+    .replace(/\r/g, "")
+    .replace(/\s/g, "")
+    .trim();
+  const privateKey = `-----BEGIN PRIVATE KEY-----\n${base64.match(/.{1,64}/g).join("\n")}\n-----END PRIVATE KEY-----\n`;
   const now = Math.floor(Date.now() / 1000);
 
   const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
