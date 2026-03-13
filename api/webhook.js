@@ -52,6 +52,10 @@ async function callClaude(userMessage) {
   });
 
   const data = await response.json();
+  if (!response.ok || !data.content) {
+    console.error("Claude API error:", JSON.stringify(data));
+    throw new Error(`Claude API error: ${data.error?.message || JSON.stringify(data)}`);
+  }
   return data.content[0].text;
 }
 
