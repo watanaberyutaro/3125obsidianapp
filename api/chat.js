@@ -191,7 +191,7 @@ async function executeTool(name, input) {
 
     case "queue_task": {
       const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-      const path = `.company/secretary/inbox/${ts}-${input.title}.md`;
+      const path = `3125情報受付事業部/_pending/${ts}-${input.title}.md`;
       await ghPut(path, `---
 created: ${today}
 status: pending
