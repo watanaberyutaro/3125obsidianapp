@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as line from "@line/bot-sdk";
-import { processMessage } from "@/lib/secretary";
+import { processMessage } from "../../../lib/secretary";
 
 const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN!,
