@@ -215,70 +215,130 @@ ${input.target_folder}
   }
 }
 
-// ==================== Agent Loop ====================
+// ==================== 高速ルーティング（ツールループ不使用）====================
 
-async function runAgent(userMessage) {
-  const todayISO = new Date().toISOString().split("T")[0];
-  const todayJP = new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", weekday: "long" });
+async function callClaudeDirect(systemPrompt, userMessage, maxTokens = 1024) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userMessage }],
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Claude API: ${data.error?.message}`);
+  return data.content[0].text;
+}
 
-  const system = `あなたは渡邊カンパニーの秘書AIです。
-オーナーは営業会社の取締役・AI企業の社長・個人開発者です。
-今日：${todayJP}（${todayISO}）
+// アイデア・メモ・カレンダーなど単純操作を高速処理
+async function handleSimple(userMessage, intent, todayISO) {
+  if (intent === "idea") {
+    const content = await callClaudeDirect(
+      `あなたは渡邊カンパニーの企画部です。以下のアイデアを受け取り、Obsidian用Markdownを生成してください。
+質問・確認は一切しない。受け取った内容だけで5つの展開案を考えてください。
 
-【最重要ルール】
-- 絶対に質問・確認・深掘りをしない
-- 受け取ったら即座に処理してObsidianに保存する
-- 返答は「かしこまりました。」のみで処理を開始し、完了後「完了しました✓」で締める
-- 追加情報を求めず、受け取った内容だけで判断・実行する
-
-【アイデア・企画の処理（最重要）】
-アイデアや企画を受け取ったら：
-1. 受け取った内容を元に「こんなのはいかがでしょうか」という5つの具体的な案を自分で考える
-2. 元のアイデア＋5つの展開案をまとめてObsidianに保存する
-3. 深掘り質問は一切しない
-
-保存フォーマット（アイデア）：
+出力フォーマット（frontmatterから始める）：
 ---
 created: ${todayISO}
 category: アイデア
 source: WebUI
 ---
 
-# 💡 [タイトル]
+# 💡 [簡潔なタイトル]
 
 ## オリジナルアイデア
-[受け取った内容]
+[受け取った内容をそのまま記載]
 
 ## 展開案
 ### 案1：[タイトル]
-[具体的な内容]
+[2〜3文の具体的な説明]
 
 ### 案2：[タイトル]
-[具体的な内容]
+[2〜3文の具体的な説明]
 
 ### 案3：[タイトル]
-[具体的な内容]
+[2〜3文の具体的な説明]
 
 ### 案4：[タイトル]
-[具体的な内容]
+[2〜3文の具体的な説明]
 
 ### 案5：[タイトル]
-[具体的な内容]
+[2〜3文の具体的な説明]`,
+      userMessage, 1200
+    );
+    // タイトル抽出
+    const titleMatch = content.match(/^# 💡 (.+)$/m);
+    const title = titleMatch ? titleMatch[1].replace(/[/\\:*?"<>|]/g, "-") : "アイデア";
+    await ghPut(`3125企画開発事業部/${todayISO}-${title}.md`, content);
+    return { text: "完了しました✓", action: "saved" };
+  }
+
+  if (intent === "memo") {
+    const content = await callClaudeDirect(
+      `以下のメモを整理してObsidian用Markdownを生成。frontmatter付き。タイトルは簡潔に。
+---
+created: ${todayISO}
+source: WebUI
+---
+# [タイトル]
+[整理した内容]`,
+      userMessage, 400
+    );
+    const titleMatch = content.match(/^# (.+)$/m);
+    const title = titleMatch ? titleMatch[1].replace(/[/\\:*?"<>|]/g, "-") : "メモ";
+    await ghPut(`3125情報受付事業部/${todayISO}-${title}.md`, content);
+    return { text: "完了しました✓", action: "saved" };
+  }
+
+  return null;
+}
+
+// ==================== Agent Loop ====================
+
+async function runAgent(userMessage) {
+  const todayISO = new Date().toISOString().split("T")[0];
+  const todayJP = new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", weekday: "long" });
+
+  // 高速ルーティング：アイデア・メモは直接処理
+  const lowerMsg = userMessage.toLowerCase();
+  const isIdea = /アイデア|企画|新サービス|ビジネス案|事業|構想|思いつき/.test(userMessage);
+  const isMemo = /^メモ|^覚えて|^記録|^メモを|^覚書/.test(userMessage);
+  const isCalendar = /予定|スケジュール|カレンダー|会議|ミーティング/.test(userMessage) && /追加|入れて|登録|作って/.test(userMessage);
+  const isRead = /タスク|todo|やること|確認|教えて|見せて|一覧|最近/.test(lowerMsg);
+  const isResearch = /調査|リサーチ|市場|競合|分析|調べて/.test(userMessage);
+
+  if (isIdea && !isRead && !isResearch) {
+    const result = await handleSimple(userMessage, "idea", todayISO);
+    if (result) return result;
+  }
+  if (isMemo && !isRead) {
+    const result = await handleSimple(userMessage, "memo", todayISO);
+    if (result) return result;
+  }
+
+  // それ以外はフルエージェントループ
+  const system = `あなたは渡邊カンパニーの秘書AIです。
+オーナーは営業会社の取締役・AI企業の社長・個人開発者です。
+今日：${todayJP}（${todayISO}）
+
+【最重要ルール】質問・確認・深掘りは絶対にしない。受け取った内容だけで即実行。
 
 【ツール使用ガイド】
-- アイデア・企画 → save_to_obsidian: 3125企画開発事業部/${todayISO}-タイトル.md（展開案5つ付き）
 - 「今日のタスクは？」→ read_obsidian_file: .company/secretary/todos/${todayISO}.md
 - 「最近のメモ/アイデア確認」→ list_obsidian_folder → read_obsidian_file
-- 「〇〇を調査して」→ web_search で調査 → save_to_obsidian: 3125市場調査事業部/タイトル.md
+- 「〇〇を調査して」→ web_search → save_to_obsidian: 3125市場調査事業部/タイトル.md
 - 「メモを残して」→ save_to_obsidian: 3125情報受付事業部/${todayISO}-タイトル.md
 - 「予定を入れて」→ add_calendar_event
 - 「LPを作って」「詳細なリサーチ」→ queue_task
 
-【返答スタイル（厳守）】
-- 処理開始時：「かしこまりました。」のみ（それ以上書かない）
-- 処理完了時：「完了しました✓」のみ（説明不要）
-- タスク確認など読み取り系：内容を箇条書きで表示
-- 絶対に「もう少し詳しく」「どんな〇〇ですか？」などと聞かない`;
+【返答スタイル】完了後「完了しました✓」のみ。タスク確認は箇条書きで表示。`;
 
   const messages = [{ role: "user", content: userMessage }];
   const actions = new Set();
@@ -293,7 +353,7 @@ source: WebUI
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 2048,
+        max_tokens: 1500,
         system,
         tools: TOOLS,
         messages,
@@ -304,7 +364,7 @@ source: WebUI
     if (!res.ok) throw new Error(`Claude API: ${data.error?.message}`);
 
     if (data.stop_reason === "end_turn") {
-      const text = data.content.find(b => b.type === "text")?.text || "処理完了です✓";
+      const text = data.content.find(b => b.type === "text")?.text || "完了しました✓";
       return { text, actions: [...actions] };
     }
 
@@ -318,7 +378,6 @@ source: WebUI
         let result;
         try {
           if (block.name === "web_search") {
-            // Anthropicがサーバーサイドで実行
             result = "検索を実行しました";
             actions.add("researched");
           } else {

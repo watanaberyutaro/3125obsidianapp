@@ -1,7 +1,7 @@
 {
   "functions": {
-    "api/webhook.js": { "maxDuration": 30 },
-    "api/chat.js": { "maxDuration": 30 },
+    "api/webhook.js": { "maxDuration": 60 },
+    "api/chat.js": { "maxDuration": 60 },
     "api/notify.js": { "maxDuration": 10 },
     "api/subscribe.js": { "maxDuration": 10 },
     "api/vapid-public-key.js": { "maxDuration": 5 }
