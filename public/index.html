@@ -144,6 +144,7 @@
     .badge.saved { background: #14532d; color: #4ade80; }
     .badge.calendar { background: #1e3a5f; color: #60a5fa; }
     .badge.queued { background: #3b1f1f; color: #f87171; }
+    .badge.researched { background: #1c1f3b; color: #a78bfa; }
 
     .typing {
       display: flex;
@@ -552,7 +553,8 @@
         let badge = null;
         if (data.action === 'saved') badge = { type: 'saved', label: '✓ Obsidianに保存' };
         else if (data.action === 'calendar') badge = { type: 'calendar', label: '✓ カレンダーに登録' };
-        else if (data.action === 'queued') badge = { type: 'queued', label: '⏳ 次回起動時に処理' };
+        else if (data.action === 'queued') badge = { type: 'queued', label: '⏳ Claude Code起動時に処理' };
+        else if (data.action === 'researched') badge = { type: 'researched', label: '🔍 リサーチ完了・保存済み' };
 
         addMessage('assistant', data.reply, badge);
       } catch (e) {
