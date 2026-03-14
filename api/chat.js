@@ -72,6 +72,28 @@ async function getGoogleToken() {
   return (await res.json()).access_token;
 }
 
+async function calendarList(dateISO) {
+  const token = await getGoogleToken();
+  const timeMin = new Date(dateISO + "T00:00:00+09:00").toISOString();
+  const timeMax = new Date(dateISO + "T23:59:59+09:00").toISOString();
+  const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(process.env.GOOGLE_CALENDAR_ID)}/events`);
+  url.searchParams.set("timeMin", timeMin);
+  url.searchParams.set("timeMax", timeMax);
+  url.searchParams.set("singleEvents", "true");
+  url.searchParams.set("orderBy", "startTime");
+  url.searchParams.set("maxResults", "20");
+  const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Calendar list error: ${JSON.stringify(await res.json())}`);
+  const data = await res.json();
+  const items = data.items || [];
+  if (!items.length) return "予定なし";
+  return items.map(e => {
+    const start = e.start?.dateTime || e.start?.date || "";
+    const time = start.includes("T") ? new Date(start).toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" }) : "終日";
+    return `- ${time} ${e.summary}`;
+  }).join("\n");
+}
+
 async function calendarAdd(title, description, datetime) {
   const token = await getGoogleToken();
   const startTime = toJSTDate(datetime);
@@ -143,6 +165,17 @@ const TOOLS = [
     }
   },
   {
+    name: "get_calendar_events",
+    description: "Googleカレンダーの予定一覧を取得。「今日の予定は？」「明日のスケジュールは？」などに使用。",
+    input_schema: {
+      type: "object",
+      properties: {
+        date: { type: "string", description: "取得する日付（YYYY-MM-DD形式）。省略時は今日" }
+      },
+      required: []
+    }
+  },
+  {
     name: "queue_task",
     description: "詳細なリサーチ・LP制作・長文コンテンツ作成など重い作業をキューに保存。Claude Code起動時に処理される。",
     input_schema: {
@@ -182,6 +215,12 @@ async function executeTool(name, input) {
     case "save_to_obsidian": {
       await ghPut(input.path, input.content);
       return `保存完了: ${input.path}`;
+    }
+
+    case "get_calendar_events": {
+      const date = input.date || today;
+      const events = await calendarList(date);
+      return `${date}の予定:\n${events}`;
     }
 
     case "add_calendar_event": {
@@ -335,6 +374,7 @@ async function runAgent(userMessage) {
 - 「最近のメモ/アイデア確認」→ list_obsidian_folder → read_obsidian_file
 - 「〇〇を調査して」→ web_search → save_to_obsidian: 3125市場調査事業部/タイトル.md
 - 「メモを残して」→ save_to_obsidian: 3125情報受付事業部/${todayISO}-タイトル.md
+- 「今日の予定は？」「明日のスケジュール」→ get_calendar_events
 - 「予定を入れて」→ add_calendar_event
 - 「LPを作って」「詳細なリサーチ」→ queue_task
 
