@@ -291,6 +291,9 @@ async function executeTool(name, input) {
 
     case "save_to_obsidian": {
       await ghPut(input.path, input.content);
+      const link = obsidianLink(input.path);
+      const fileName = input.path.split("/").pop().replace(/\.md$/, "");
+      notifyReceived(`💾 Obsidian保存: ${fileName}`, input.path, link).catch(() => {});
       return `保存完了: ${input.path}`;
     }
 
@@ -332,6 +335,13 @@ ${input.target_folder}
   }
 }
 
+// ==================== Obsidian リンク ====================
+
+function obsidianLink(path) {
+  const vault = process.env.OBSIDIAN_VAULT_NAME || "Obsidian Vault";
+  return `obsidian://open?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(path)}`;
+}
+
 // ==================== Discord通知 ====================
 
 async function sendDiscord(title, body, color = 0x95a5a6) {
@@ -354,8 +364,9 @@ async function sendDiscord(title, body, color = 0x95a5a6) {
 
 // ==================== 受信通知（Discord + カレンダー）====================
 
-async function notifyReceived(title, body) {
+async function notifyReceived(title, body, link) {
   const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  const discordBody = [body, link ? `[Obsidianで開く](${link})` : ""].filter(Boolean).join("\n\n");
   const discordPromise = webhookUrl
     ? fetch(webhookUrl, {
         method: "POST",
@@ -363,7 +374,7 @@ async function notifyReceived(title, body) {
         body: JSON.stringify({
           embeds: [{
             title,
-            description: body || null,
+            description: discordBody || null,
             color: 0x95a5a6,
             timestamp: new Date().toISOString(),
             footer: { text: "渡邊カンパニー 秘書室" },
@@ -372,6 +383,7 @@ async function notifyReceived(title, body) {
       }).catch(() => {})
     : Promise.resolve();
 
+  const calendarDescription = [body, link ? `🔗 ${link}` : ""].filter(Boolean).join("\n\n");
   const calendarPromise = (async () => {
     try {
       const token = await getGoogleToken();
@@ -384,7 +396,7 @@ async function notifyReceived(title, body) {
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             summary: title,
-            description: body || "",
+            description: calendarDescription,
             start: { dateTime: now.toISOString(), timeZone: "Asia/Tokyo" },
             end:   { dateTime: end.toISOString(),  timeZone: "Asia/Tokyo" },
             colorId: "8",
@@ -531,7 +543,9 @@ async function runAgent(userMessage) {
     const replyText = `承りました✓\n${cls.dept}へのタスクをキューに追加いたしました、ご主人様。\nClaude Code起動時に処理いたします。`;
     appendHistory(history, userMessage, replyText).catch(() => {});
     const preview = userMessage.slice(0, 60) + (userMessage.length > 60 ? "…" : "");
-    notifyReceived(`📥 キュー受付: ${preview}`, `担当: ${cls.dept}\n内容: ${userMessage}`).catch(() => {});
+    const pendingPath = `3125情報受付事業部/_pending/${ts}-${title}.md`;
+    const link = obsidianLink(pendingPath);
+    notifyReceived(`📥 キュー受付: ${preview}`, `担当: ${cls.dept}\n内容: ${userMessage}`, link).catch(() => {});
     return { text: replyText, actions: ["queued"] };
   }
 
