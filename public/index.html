@@ -483,7 +483,7 @@
       input.focus();
     }
 
-    function addMessage(role, text, badge) {
+    function addMessage(role, text, badgeLabel) {
       if (isFirstMessage) {
         document.querySelector('.welcome')?.remove();
         isFirstMessage = false;
@@ -497,10 +497,10 @@
       bubble.textContent = text;
       div.appendChild(bubble);
 
-      if (badge) {
+      if (badgeLabel) {
         const b = document.createElement('span');
         b.className = 'badge';
-        b.textContent = badge.label;
+        b.textContent = badgeLabel;
         div.appendChild(b);
       }
 
@@ -513,6 +513,7 @@
       messages.scrollTop = messages.scrollHeight;
 
       if (role === 'assistant' && document.hidden) incrementBadge();
+      return { div, bubble, meta };
     }
 
     function showTyping() {
@@ -528,6 +529,14 @@
       document.getElementById('typing')?.remove();
     }
 
+    function badgeLabel(action) {
+      if (action === 'saved')      return '✓  Obsidianに保存';
+      if (action === 'calendar')   return '✓  カレンダーに登録';
+      if (action === 'queued')     return '⏳  Claude Code起動時に処理';
+      if (action === 'researched') return '✓  リサーチ完了・保存済み';
+      return null;
+    }
+
     async function send() {
       const text = input.value.trim();
       if (!text || sendBtn.disabled) return;
@@ -540,29 +549,105 @@
       showTyping();
 
       try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text })
-        });
-
-        const data = await res.json();
-        removeTyping();
-
-        let badge = null;
-        if (data.action === 'saved')      badge = { label: '✓  Obsidianに保存' };
-        else if (data.action === 'calendar') badge = { label: '✓  カレンダーに登録' };
-        else if (data.action === 'queued')   badge = { label: '⏳  Claude Code起動時に処理' };
-        else if (data.action === 'researched') badge = { label: '✓  リサーチ完了・保存済み' };
-
-        addMessage('assistant', data.reply, badge);
+        await sendStreaming(text);
       } catch (e) {
-        removeTyping();
-        addMessage('assistant', '申し訳ありません。接続エラーが発生しました。');
+        console.error('Stream failed, falling back:', e);
+        try {
+          await sendFallback(text);
+        } catch {
+          removeTyping();
+          addMessage('assistant', '申し訳ありません。接続エラーが発生しました。');
+        }
       }
 
       sendBtn.disabled = false;
       input.focus();
+    }
+
+    async function sendStreaming(text) {
+      const res = await fetch('/api/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let fullText = '';
+      let bubbleEl = null;
+      let divEl = null;
+      let metaEl = null;
+      let started = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let event;
+          try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+          if (event.text) {
+            if (!started) {
+              removeTyping();
+              // Create assistant bubble
+              if (isFirstMessage) {
+                document.querySelector('.welcome')?.remove();
+                isFirstMessage = false;
+              }
+              divEl = document.createElement('div');
+              divEl.className = 'message assistant';
+              bubbleEl = document.createElement('div');
+              bubbleEl.className = 'bubble';
+              metaEl = document.createElement('div');
+              metaEl.className = 'message-meta';
+              metaEl.textContent = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+              divEl.appendChild(bubbleEl);
+              divEl.appendChild(metaEl);
+              messages.appendChild(divEl);
+              started = true;
+            }
+            fullText += event.text;
+            bubbleEl.textContent = fullText;
+            messages.scrollTop = messages.scrollHeight;
+          }
+
+          if (event.done) {
+            if (!started) {
+              removeTyping();
+              if (!fullText) fullText = '完了しました✓';
+              addMessage('assistant', fullText, badgeLabel(event.action));
+            } else {
+              const label = badgeLabel(event.action);
+              if (label) {
+                const b = document.createElement('span');
+                b.className = 'badge';
+                b.textContent = label;
+                divEl.insertBefore(b, metaEl);
+              }
+              if (document.hidden) incrementBadge();
+            }
+          }
+        }
+      }
+    }
+
+    async function sendFallback(text) {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+      });
+      const data = await res.json();
+      removeTyping();
+      addMessage('assistant', data.reply, badgeLabel(data.action));
     }
   </script>
 </body>
