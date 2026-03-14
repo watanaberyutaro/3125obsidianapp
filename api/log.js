@@ -39,22 +39,26 @@ async function getGoogleToken() {
   return (await res.json()).access_token;
 }
 
-async function addCalendarLog(title, description) {
+async function addCalendarLog(title, description, link, startTime, endTime) {
   const token = await getGoogleToken();
-  const now   = new Date();
-  const end   = new Date(now.getTime() + 15 * 60 * 1000); // 15分のログイベント
+  const start = startTime ? new Date(startTime) : new Date();
+  const end   = endTime   ? new Date(endTime)   : new Date(start.getTime() + 15 * 60 * 1000);
+  const fullDescription = [description, link ? `🔗 ${link}` : ""].filter(Boolean).join("\n\n");
+  // startTimeが指定された場合は「予定」→ デフォルト色（colorId指定なし）
+  // startTime未指定の場合は「ログ」→ グラファイト（colorId: "8"）
+  const eventBody = {
+    summary: title,
+    description: fullDescription,
+    start: { dateTime: start.toISOString(), timeZone: "Asia/Tokyo" },
+    end:   { dateTime: end.toISOString(),   timeZone: "Asia/Tokyo" },
+  };
+  if (!startTime) eventBody.colorId = "8"; // ログのみグレー
   await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(process.env.GOOGLE_CALENDAR_ID)}/events`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        summary: title,
-        description: description || "",
-        start: { dateTime: now.toISOString(), timeZone: "Asia/Tokyo" },
-        end:   { dateTime: end.toISOString(),  timeZone: "Asia/Tokyo" },
-        colorId: "8", // グラファイト（ログっぽい色）
-      }),
+      body: JSON.stringify(eventBody),
     }
   );
 }
@@ -84,16 +88,16 @@ module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
 
-  const { title, description, notify = false } = req.body || {};
+  const { title, description, notify = false, link, startTime, endTime } = req.body || {};
   if (!title) return res.status(400).json({ error: "title required" });
 
   const results = { calendar: false, push: false };
 
   // カレンダーログ（失敗してもPushは試みる）
   try {
-    await addCalendarLog(title, description || "");
+    await addCalendarLog(title, description || "", link, startTime, endTime);
     results.calendar = true;
   } catch (e) {
     console.error("Calendar log error:", e.message);
