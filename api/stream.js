@@ -351,9 +351,6 @@ async function runAgentStream(userMessage, res) {
   const todayISO = new Date().toISOString().split("T")[0];
   const todayJP  = new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", weekday: "long" });
 
-  const preview = userMessage.slice(0, 60) + (userMessage.length > 60 ? "…" : "");
-  notifyReceived(`📥 受付: ${preview}`, userMessage).catch(() => {});
-
   const [history, profile] = await Promise.all([loadHistory(), loadProfile()]);
   const lower   = userMessage.toLowerCase();
 
@@ -374,6 +371,8 @@ async function runAgentStream(userMessage, res) {
     );
     const replyText = `承りました✓\n${cls.dept}へのタスクをキューに追加いたしました、ご主人様。\nClaude Code起動時に処理いたします。`;
     appendHistory(history, userMessage, replyText).catch(() => {});
+    const preview = userMessage.slice(0, 60) + (userMessage.length > 60 ? "…" : "");
+    notifyReceived(`📥 キュー受付: ${preview}`, `担当: ${cls.dept}\n内容: ${userMessage}`).catch(() => {});
     send({ text: replyText });
     send({ done: true, action: "queued" });
     res.end();
