@@ -41,7 +41,57 @@ async function ghPut(path, content) {
 // ==================== 会話履歴 ====================
 
 const HISTORY_PATH = ".company/secretary/chat-history.json";
-const HISTORY_LIMIT = 30; // 保存する最大ターン数（ユーザー+アシスタント各）
+const HISTORY_LIMIT = 30;
+
+// ==================== オーナープロフィール ====================
+
+const PROFILE_PATH = ".company/secretary/owner-profile.md";
+
+async function loadProfile() {
+  try {
+    const data = await ghGet(PROFILE_PATH);
+    if (!data) return "";
+    return Buffer.from(data.content, "base64").toString("utf-8");
+  } catch {
+    return "";
+  }
+}
+
+async function updateProfile(currentProfile, userMessage, assistantText) {
+  const prompt = `以下の会話から、ご主人様について新たに分かったことがあれば、プロフィールを更新してください。新しい情報がなければ "NO_UPDATE" とだけ返してください。
+
+【現在のプロフィール】
+${currentProfile}
+
+【今回の会話】
+ご主人様: ${userMessage}
+秘書: ${assistantText}
+
+新しい情報がある場合は、更新後のプロフィール全文をMarkdown形式で返してください。`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 600,
+        system: "あなたはプロフィール管理システムです。会話から人物情報を抽出・更新します。",
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    const data = await res.json();
+    const updated = data.content?.[0]?.text || "";
+    if (!updated || updated.trim() === "NO_UPDATE" || updated.includes("NO_UPDATE")) return;
+    await ghPut(PROFILE_PATH, updated);
+  } catch (e) {
+    console.error("Profile update error:", e);
+  }
+}
 
 async function loadHistory() {
   try {
@@ -388,8 +438,9 @@ async function runAgent(userMessage) {
   const todayISO = new Date().toISOString().split("T")[0];
   const todayJP = new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", weekday: "long" });
 
-  // 会話履歴を並行ロード
+  // 会話履歴・プロフィールを並行ロード
   const historyPromise = loadHistory();
+  const profilePromise = loadProfile();
 
   // 高速ルーティング：アイデア・メモは直接処理
   const lowerMsg = userMessage.toLowerCase();
@@ -411,7 +462,7 @@ async function runAgent(userMessage) {
       `3125情報受付事業部/_pending/${ts}-${title}.md`,
       `---\ncreated: ${todayISO}\nstatus: pending\ntype: ${cls.type}\ntarget_folder: ${cls.folder}\nsource: WebUI\n---\n\n# 📥 ${title}\n\n## 指示内容\n${userMessage}\n\n## 担当部署\n${cls.dept}\n\n## 保存先\n${cls.folder}\n`
     );
-    const replyText = `承りました✓\n${cls.dept}へのタスクをキューに追加しました。\nClaude Code起動時に処理します。`;
+    const replyText = `承りました✓\n${cls.dept}へのタスクをキューに追加いたしました、ご主人様。\nClaude Code起動時に処理いたします。`;
     appendHistory(history, userMessage, replyText).catch(() => {});
     return { text: replyText, actions: ["queued"] };
   }
@@ -433,13 +484,17 @@ async function runAgent(userMessage) {
     }
   }
 
-  // 履歴を会話コンテキストとして組み立て
-  const history = await historyPromise;
+  // 履歴・プロフィールを会話コンテキストとして組み立て
+  const [history, profile] = await Promise.all([historyPromise, profilePromise]);
   const historyMessages = history.map(h => ({ role: h.role, content: h.content }));
 
   // フルエージェントループ
-  const system = `あなたは渡邊カンパニーの秘書AIです。
-オーナーは営業会社の取締役・AI企業の社長・個人開発者です。
+  const system = `あなたは渡邊カンパニーの専属秘書AIです。
+オーナーのことは常に「ご主人様」とお呼びし、丁寧かつ親しみやすい口調でお話しください。
+
+【ご主人様プロフィール】
+${profile || "（情報収集中です）"}
+
 今日：${todayJP}（${todayISO}）
 
 【最重要ルール】質問・確認・深掘りは絶対にしない。受け取った内容だけで即実行。
@@ -454,7 +509,7 @@ async function runAgent(userMessage) {
 - 「予定を入れて」→ add_calendar_event
 - 「LPを作って」「詳細なリサーチ」→ queue_task
 
-【返答スタイル】完了後「完了しました✓」のみ。タスク確認は箇条書きで表示。`;
+【返答スタイル】完了後は「〜いたしました、ご主人様。」の形で締める。タスク確認は箇条書きで表示。`;
 
   const messages = [...historyMessages, { role: "user", content: userMessage }];
   const actions = new Set();
@@ -481,8 +536,9 @@ async function runAgent(userMessage) {
     if (!res.ok) throw new Error(`Claude API: ${data.error?.message}`);
 
     if (data.stop_reason === "end_turn") {
-      finalText = data.content.find(b => b.type === "text")?.text || "完了しました✓";
+      finalText = data.content.find(b => b.type === "text")?.text || "完了いたしました、ご主人様。";
       appendHistory(history, userMessage, finalText).catch(() => {});
+      updateProfile(profile, userMessage, finalText).catch(() => {});
       return { text: finalText, actions: [...actions] };
     }
 
