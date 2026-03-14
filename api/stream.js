@@ -241,6 +241,26 @@ async function runAgentStream(userMessage, res) {
   const todayJP  = new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", weekday: "long" });
 
   const history = await loadHistory();
+
+  // リサーチ系 → APIを使わずキューに直接保存
+  const isResearch = /調査|リサーチ|市場|競合|分析|調べて|まとめて|トレンド/.test(userMessage);
+  const isRead     = /タスク|todo|やること|確認|教えて|見せて|一覧|最近/.test(userMessage.toLowerCase());
+
+  if (isResearch && !isRead) {
+    const ts    = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const title = userMessage.replace(/[「」【】『』]/g, "").slice(0, 30).trim();
+    const qpath = `3125情報受付事業部/_pending/${ts}-${title}.md`;
+    await ghPut(qpath,
+      `---\ncreated: ${todayISO}\nstatus: pending\ntype: research\ntarget_folder: 3125市場調査事業部\n---\n\n# 📥 ${title}\n\n## 実行指示\n${userMessage}\n\n## 保存先\n3125市場調査事業部\n`
+    );
+    const replyText = "キューに追加しました✓\nClaude Code起動時にリサーチします。";
+    appendHistory(history, userMessage, replyText).catch(() => {});
+    send({ text: replyText });
+    send({ done: true, action: "queued" });
+    res.end();
+    return;
+  }
+
   const historyMessages = history.map(h => ({ role: h.role, content: h.content }));
 
   const system = `あなたは渡邊カンパニーの秘書AIです。
