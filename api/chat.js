@@ -38,6 +38,33 @@ async function ghPut(path, content) {
   });
 }
 
+// ==================== 会話履歴 ====================
+
+const HISTORY_PATH = ".company/secretary/chat-history.json";
+const HISTORY_LIMIT = 30; // 保存する最大ターン数（ユーザー+アシスタント各）
+
+async function loadHistory() {
+  try {
+    const data = await ghGet(HISTORY_PATH);
+    if (!data) return [];
+    const json = JSON.parse(Buffer.from(data.content, "base64").toString("utf-8"));
+    return Array.isArray(json) ? json.slice(-(HISTORY_LIMIT * 2)) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function appendHistory(history, userMessage, assistantText) {
+  const ts = new Date().toISOString();
+  history.push(
+    { role: "user",      content: userMessage,    ts },
+    { role: "assistant", content: assistantText,  ts }
+  );
+  const trimmed = history.slice(-(HISTORY_LIMIT * 2));
+  await ghPut(HISTORY_PATH, JSON.stringify(trimmed, null, 2));
+  return trimmed;
+}
+
 // ==================== Google Calendar ====================
 
 function toJSTDate(datetime) {
@@ -345,29 +372,44 @@ async function runAgent(userMessage) {
   const todayISO = new Date().toISOString().split("T")[0];
   const todayJP = new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", weekday: "long" });
 
+  // 会話履歴を並行ロード
+  const historyPromise = loadHistory();
+
   // 高速ルーティング：アイデア・メモは直接処理
   const lowerMsg = userMessage.toLowerCase();
   const isIdea = /アイデア|企画|新サービス|ビジネス案|事業|構想|思いつき/.test(userMessage);
   const isMemo = /^メモ|^覚えて|^記録|^メモを|^覚書/.test(userMessage);
-  const isCalendar = /予定|スケジュール|カレンダー|会議|ミーティング/.test(userMessage) && /追加|入れて|登録|作って/.test(userMessage);
   const isRead = /タスク|todo|やること|確認|教えて|見せて|一覧|最近/.test(lowerMsg);
   const isResearch = /調査|リサーチ|市場|競合|分析|調べて/.test(userMessage);
 
   if (isIdea && !isRead && !isResearch) {
     const result = await handleSimple(userMessage, "idea", todayISO);
-    if (result) return result;
+    if (result) {
+      const history = await historyPromise;
+      appendHistory(history, userMessage, result.text).catch(() => {});
+      return result;
+    }
   }
   if (isMemo && !isRead) {
     const result = await handleSimple(userMessage, "memo", todayISO);
-    if (result) return result;
+    if (result) {
+      const history = await historyPromise;
+      appendHistory(history, userMessage, result.text).catch(() => {});
+      return result;
+    }
   }
 
-  // それ以外はフルエージェントループ
+  // 履歴を会話コンテキストとして組み立て
+  const history = await historyPromise;
+  const historyMessages = history.map(h => ({ role: h.role, content: h.content }));
+
+  // フルエージェントループ
   const system = `あなたは渡邊カンパニーの秘書AIです。
 オーナーは営業会社の取締役・AI企業の社長・個人開発者です。
 今日：${todayJP}（${todayISO}）
 
 【最重要ルール】質問・確認・深掘りは絶対にしない。受け取った内容だけで即実行。
+過去の会話履歴を参照して文脈を把握した上で返答すること。
 
 【ツール使用ガイド】
 - 「今日のタスクは？」→ read_obsidian_file: .company/secretary/todos/${todayISO}.md
@@ -380,8 +422,9 @@ async function runAgent(userMessage) {
 
 【返答スタイル】完了後「完了しました✓」のみ。タスク確認は箇条書きで表示。`;
 
-  const messages = [{ role: "user", content: userMessage }];
+  const messages = [...historyMessages, { role: "user", content: userMessage }];
   const actions = new Set();
+  let finalText = "処理が完了しました。詳細はObsidianをご確認ください。";
 
   for (let i = 0; i < 8; i++) {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -404,8 +447,9 @@ async function runAgent(userMessage) {
     if (!res.ok) throw new Error(`Claude API: ${data.error?.message}`);
 
     if (data.stop_reason === "end_turn") {
-      const text = data.content.find(b => b.type === "text")?.text || "完了しました✓";
-      return { text, actions: [...actions] };
+      finalText = data.content.find(b => b.type === "text")?.text || "完了しました✓";
+      appendHistory(history, userMessage, finalText).catch(() => {});
+      return { text: finalText, actions: [...actions] };
     }
 
     if (data.stop_reason === "tool_use") {
@@ -439,11 +483,13 @@ async function runAgent(userMessage) {
     }
 
     // 予期しない終了
-    const text = data.content?.find(b => b.type === "text")?.text || "処理完了です✓";
-    return { text, actions: [...actions] };
+    finalText = data.content?.find(b => b.type === "text")?.text || "処理完了です✓";
+    appendHistory(history, userMessage, finalText).catch(() => {});
+    return { text: finalText, actions: [...actions] };
   }
 
-  return { text: "処理が完了しました。詳細はObsidianをご確認ください。", actions: [...actions] };
+  appendHistory(history, userMessage, finalText).catch(() => {});
+  return { text: finalText, actions: [...actions] };
 }
 
 // ==================== Main Handler ====================
