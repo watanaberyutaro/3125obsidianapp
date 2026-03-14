@@ -1,4 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="100" fill="#6366f1"/>
-  <text x="256" y="340" font-family="'Hiragino Sans', 'Yu Gothic', sans-serif" font-size="300" font-weight="bold" text-anchor="middle" fill="white">秘</text>
+  <!-- Background -->
+  <rect width="512" height="512" rx="88" fill="#080808"/>
+
+  <!-- Cardinal extending lines (N/S/E/W) -->
+  <line x1="256" y1="52"  x2="256" y2="140" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
+  <line x1="372" y1="256" x2="460" y2="256" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
+  <line x1="256" y1="372" x2="256" y2="460" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
+  <line x1="52"  y1="256" x2="140" y2="256" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
+
+  <!-- Main diamond (filled white) -->
+  <polygon points="256,140 372,256 256,372 140,256" fill="#ffffff"/>
+
+  <!-- Inner diamond cutout -->
+  <polygon points="256,200 312,256 256,312 200,256" fill="#080808"/>
+
+  <!-- Center dot -->
+  <circle cx="256" cy="256" r="24" fill="#ffffff"/>
 </svg>
