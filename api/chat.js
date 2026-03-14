@@ -302,6 +302,7 @@ async function executeTool(name, input) {
 
     case "add_calendar_event": {
       await calendarAdd(input.title, input.description || "", input.datetime);
+      sendDiscord(`📅 カレンダー登録: ${input.title}`, `日時: ${input.datetime}${input.description ? "\n" + input.description : ""}`, 0x5865f2).catch(() => {});
       return `カレンダー登録完了: ${input.title} (${input.datetime})`;
     }
 
@@ -329,6 +330,26 @@ ${input.target_folder}
     default:
       return `未知のツール: ${name}`;
   }
+}
+
+// ==================== Discord通知 ====================
+
+async function sendDiscord(title, body, color = 0x95a5a6) {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) return;
+  await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      embeds: [{
+        title,
+        description: body || null,
+        color,
+        timestamp: new Date().toISOString(),
+        footer: { text: "渡邊カンパニー 秘書室" },
+      }],
+    }),
+  }).catch(() => {});
 }
 
 // ==================== 受信通知（Discord + カレンダー）====================
