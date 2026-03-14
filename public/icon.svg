@@ -2,18 +2,21 @@
   <!-- Background -->
   <rect width="512" height="512" rx="88" fill="#080808"/>
 
-  <!-- Cardinal extending lines (N/S/E/W) -->
-  <line x1="256" y1="52"  x2="256" y2="140" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
-  <line x1="372" y1="256" x2="460" y2="256" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
-  <line x1="256" y1="372" x2="256" y2="460" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
-  <line x1="52"  y1="256" x2="140" y2="256" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
+  <!-- Subtle inner border -->
+  <rect x="24" y="24" width="464" height="464" rx="66" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.1"/>
 
-  <!-- Main diamond (filled white) -->
-  <polygon points="256,140 372,256 256,372 140,256" fill="#ffffff"/>
+  <!-- Cardinal extending lines -->
+  <line x1="256" y1="76"  x2="256" y2="120" stroke="#ffffff" stroke-width="11" stroke-linecap="round"/>
+  <line x1="392" y1="256" x2="436" y2="256" stroke="#ffffff" stroke-width="11" stroke-linecap="round"/>
+  <line x1="256" y1="392" x2="256" y2="436" stroke="#ffffff" stroke-width="11" stroke-linecap="round"/>
+  <line x1="76"  y1="256" x2="120" y2="256" stroke="#ffffff" stroke-width="11" stroke-linecap="round"/>
+
+  <!-- Main diamond -->
+  <polygon points="256,120 392,256 256,392 120,256" fill="#ffffff"/>
 
   <!-- Inner diamond cutout -->
-  <polygon points="256,200 312,256 256,312 200,256" fill="#080808"/>
+  <polygon points="256,194 318,256 256,318 194,256" fill="#080808"/>
 
   <!-- Center dot -->
-  <circle cx="256" cy="256" r="24" fill="#ffffff"/>
+  <circle cx="256" cy="256" r="21" fill="#ffffff"/>
 </svg>
