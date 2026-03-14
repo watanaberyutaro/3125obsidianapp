@@ -262,7 +262,7 @@ async function executeTool(name, input) {
       await ghPut(input.path, input.content);
       const link = obsidianLink(input.path);
       const fileName = input.path.split("/").pop().replace(/\.md$/, "");
-      notifyReceived(`💾 Obsidian保存: ${fileName}`, input.path, link).catch(() => {});
+      await notifyReceived(`💾 Obsidian保存: ${fileName}`, input.path, link).catch(() => {});
       return `保存完了: ${input.path}`;
     }
     case "get_calendar_events": {
@@ -407,7 +407,7 @@ async function runAgentStream(userMessage, res) {
     const preview = userMessage.slice(0, 60) + (userMessage.length > 60 ? "…" : "");
     const pendingPath = `3125情報受付事業部/_pending/${ts}-${title}.md`;
     const link = obsidianLink(pendingPath);
-    notifyReceived(`📥 キュー受付: ${preview}`, `担当: ${cls.dept}\n内容: ${userMessage}`, link).catch(() => {});
+    await notifyReceived(`📥 キュー受付: ${preview}`, `担当: ${cls.dept}\n内容: ${userMessage}`, link).catch(() => {});
     send({ text: replyText });
     send({ done: true, action: "queued" });
     res.end();
