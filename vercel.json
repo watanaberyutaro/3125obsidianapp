@@ -4,6 +4,7 @@
     "api/chat.js": { "maxDuration": 60 },
     "api/stream.js": { "maxDuration": 60 },
     "api/log.js": { "maxDuration": 15 },
+    "api/notify-all.js": { "maxDuration": 15 },
     "api/notify.js": { "maxDuration": 10 },
     "api/subscribe.js": { "maxDuration": 10 },
     "api/vapid-public-key.js": { "maxDuration": 5 }

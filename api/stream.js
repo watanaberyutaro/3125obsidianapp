@@ -232,6 +232,22 @@ async function executeTool(name, input) {
   }
 }
 
+// ==================== タスク分類（Claude API不使用）====================
+
+function classifyTask(msg) {
+  if (/調査|リサーチ|市場|競合|分析|調べて|トレンド|まとめて/.test(msg))
+    return { type: "research",         dept: "リサーチ部",   folder: "3125市場調査事業部" };
+  if (/LP|ランディング|コンテンツ|記事|ブログ|SNS|広告|マーケ/.test(msg))
+    return { type: "content_creation", dept: "マーケ部",     folder: "3125マーケティング事業部" };
+  if (/アイデア|企画|新サービス|ビジネス案|事業|構想|思いつき/.test(msg))
+    return { type: "idea",             dept: "企画部",       folder: "3125企画開発事業部" };
+  if (/コード|実装|設計|開発|バグ|プログラム/.test(msg))
+    return { type: "coding",           dept: "開発部",       folder: "3125エンジニアリング事業部" };
+  if (/メモ|覚えて|記録|覚書/.test(msg))
+    return { type: "memo",             dept: "秘書室",       folder: "3125情報受付事業部" };
+  return   { type: "general",          dept: "秘書室",       folder: "3125情報受付事業部" };
+}
+
 // ==================== Streaming Agent ====================
 
 async function runAgentStream(userMessage, res) {
@@ -241,19 +257,24 @@ async function runAgentStream(userMessage, res) {
   const todayJP  = new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", weekday: "long" });
 
   const history = await loadHistory();
+  const lower   = userMessage.toLowerCase();
 
-  // リサーチ系 → APIを使わずキューに直接保存
-  const isResearch = /調査|リサーチ|市場|競合|分析|調べて|まとめて|トレンド/.test(userMessage);
-  const isRead     = /タスク|todo|やること|確認|教えて|見せて|一覧|最近/.test(userMessage.toLowerCase());
+  // ── 即時処理かキューかを判定 ──────────────────────────────────
+  const isCalendarAdd  = /予定|カレンダー|会議|ミーティング/.test(userMessage) && /追加|入れて|登録|作って/.test(userMessage);
+  const isCalendarRead = /予定|スケジュール/.test(userMessage) && /は|教えて|確認|見せて/.test(userMessage) && !isCalendarAdd;
+  const isTaskRead     = /タスク|todo|やること/.test(lower) && /教えて|確認|見せて|一覧|ある|は/.test(lower);
+  const isInstant      = isCalendarAdd || isCalendarRead || isTaskRead;
 
-  if (isResearch && !isRead) {
+  if (!isInstant) {
+    // キューに直接保存（Claude API不使用）
+    const cls   = classifyTask(userMessage);
     const ts    = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const title = userMessage.replace(/[「」【】『』]/g, "").slice(0, 30).trim();
-    const qpath = `3125情報受付事業部/_pending/${ts}-${title}.md`;
-    await ghPut(qpath,
-      `---\ncreated: ${todayISO}\nstatus: pending\ntype: research\ntarget_folder: 3125市場調査事業部\n---\n\n# 📥 ${title}\n\n## 実行指示\n${userMessage}\n\n## 保存先\n3125市場調査事業部\n`
+    await ghPut(
+      `3125情報受付事業部/_pending/${ts}-${title}.md`,
+      `---\ncreated: ${todayISO}\nstatus: pending\ntype: ${cls.type}\ntarget_folder: ${cls.folder}\nsource: WebUI\n---\n\n# 📥 ${title}\n\n## 指示内容\n${userMessage}\n\n## 担当部署\n${cls.dept}\n\n## 保存先\n${cls.folder}\n`
     );
-    const replyText = "キューに追加しました✓\nClaude Code起動時にリサーチします。";
+    const replyText = `承りました✓\n${cls.dept}へのタスクをキューに追加しました。\nClaude Code起動時に処理します。`;
     appendHistory(history, userMessage, replyText).catch(() => {});
     send({ text: replyText });
     send({ done: true, action: "queued" });
@@ -261,6 +282,7 @@ async function runAgentStream(userMessage, res) {
     return;
   }
 
+  // ── 即時処理：エージェントループへ ──────────────────────────────
   const historyMessages = history.map(h => ({ role: h.role, content: h.content }));
 
   const system = `あなたは渡邊カンパニーの秘書AIです。
