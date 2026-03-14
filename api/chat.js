@@ -331,6 +331,51 @@ ${input.target_folder}
   }
 }
 
+// ==================== 受信通知（Discord + カレンダー）====================
+
+async function notifyReceived(title, body) {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  const discordPromise = webhookUrl
+    ? fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          embeds: [{
+            title,
+            description: body || null,
+            color: 0x95a5a6,
+            timestamp: new Date().toISOString(),
+            footer: { text: "渡邊カンパニー 秘書室" },
+          }],
+        }),
+      }).catch(() => {})
+    : Promise.resolve();
+
+  const calendarPromise = (async () => {
+    try {
+      const token = await getGoogleToken();
+      const now = new Date();
+      const end = new Date(now.getTime() + 15 * 60 * 1000);
+      await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(process.env.GOOGLE_CALENDAR_ID)}/events`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            summary: title,
+            description: body || "",
+            start: { dateTime: now.toISOString(), timeZone: "Asia/Tokyo" },
+            end:   { dateTime: end.toISOString(),  timeZone: "Asia/Tokyo" },
+            colorId: "8",
+          }),
+        }
+      );
+    } catch {}
+  })();
+
+  await Promise.all([discordPromise, calendarPromise]);
+}
+
 // ==================== タスク分類（Claude API不使用）====================
 
 function classifyTask(msg) {
@@ -437,6 +482,10 @@ source: WebUI
 async function runAgent(userMessage) {
   const todayISO = new Date().toISOString().split("T")[0];
   const todayJP = new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", weekday: "long" });
+
+  // 受信通知（fire-and-forget）
+  const preview = userMessage.slice(0, 60) + (userMessage.length > 60 ? "…" : "");
+  notifyReceived(`📥 受付: ${preview}`, userMessage).catch(() => {});
 
   // 会話履歴・プロフィールを並行ロード
   const historyPromise = loadHistory();
