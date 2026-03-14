@@ -31,19 +31,31 @@ async function sendWebPush(title, body) {
   await webpush.sendNotification(sub, JSON.stringify({ title, body, url: "/" }));
 }
 
-// ==================== LINE ====================
+// ==================== Discord ====================
 
-async function sendLine(title, body) {
-  const data = await ghGet(".company/secretary/line-config.json");
-  if (!data) throw new Error("LINE config not found");
-  const { userId } = JSON.parse(Buffer.from(data.content, "base64").toString("utf-8"));
-  await fetch("https://api.line.me/v2/bot/message/push", {
+async function sendDiscord(title, body) {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) throw new Error("DISCORD_WEBHOOK_URL not set");
+
+  // 完了系・エラー系でカラーを変える
+  const color =
+    /完了|✅|🎉/.test(title) ? 0x57f287 :  // 緑
+    /エラー|失敗|⚠️/.test(title) ? 0xed4245 : // 赤
+    /開始|🚀/.test(title)       ? 0x5865f2 :  // 青紫
+    0x95a5a6;                                  // グレー（中間工程）
+
+  await fetch(webhookUrl, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
-    },
-    body: JSON.stringify({ to: userId, messages: [{ type: "text", text: `${title}\n${body}` }] }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      embeds: [{
+        title,
+        description: body || null,
+        color,
+        timestamp: new Date().toISOString(),
+        footer: { text: "渡邊カンパニー 秘書室" },
+      }],
+    }),
   });
 }
 
@@ -55,17 +67,6 @@ async function sendLine(title, body) {
 //     method: "POST",
 //     headers: { "Content-Type": "application/json" },
 //     body: JSON.stringify({ text: `*${title}*\n${body}` }),
-//   });
-// }
-
-// ==================== Discord（将来用） ====================
-// async function sendDiscord(title, body) {
-//   const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
-//   if (!webhookUrl) throw new Error("DISCORD_WEBHOOK_URL not set");
-//   await fetch(webhookUrl, {
-//     method: "POST",
-//     headers: { "Content-Type": "application/json" },
-//     body: JSON.stringify({ embeds: [{ title, description: body }] }),
 //   });
 // }
 
@@ -81,16 +82,13 @@ module.exports = async (req, res) => {
   const { title, body = "" } = req.body || {};
   if (!title) return res.status(400).json({ error: "title required" });
 
-  const results = { push: false, line: false };
+  const results = { push: false, discord: false };
 
   try { await sendWebPush(title, body); results.push = true; }
   catch (e) { console.error("Push error:", e.message); }
 
-  try { await sendLine(title, body); results.line = true; }
-  catch (e) { console.error("LINE error:", e.message); }
-
-  // 将来: Slack/Discordを追加する場合はここに追記
-  // try { await sendSlack(title, body); results.slack = true; } catch(e) {}
+  try { await sendDiscord(title, body); results.discord = true; }
+  catch (e) { console.error("Discord error:", e.message); }
 
   return res.status(200).json({ ok: true, ...results });
 };
