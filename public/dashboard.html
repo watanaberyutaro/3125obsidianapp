@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080808">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <title>タスク管理 | 渡邊カンパニー</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+      background: #080808;
+      color: #e0e0e0;
+      min-height: 100dvh;
+    }
+
+    .app {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 0 16px 80px;
+    }
+
+    /* ── HEADER ── */
+    header {
+      padding: 14px 0 20px;
+      padding-top: max(14px, env(safe-area-inset-top));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #1a1a1a;
+      margin-bottom: 20px;
+    }
+
+    .header-left h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #e0e0e0;
+    }
+
+    .header-left .date-label {
+      font-size: 11px;
+      color: #555;
+      margin-top: 2px;
+    }
+
+    .header-right { display: flex; gap: 8px; align-items: center; }
+
+    .btn-back {
+      background: #141414;
+      border: 1px solid #242424;
+      color: #888;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .btn-back:hover { color: #e0e0e0; border-color: #3a3a3a; }
+
+    .btn-reload {
+      background: none;
+      border: 1px solid #1e1e1e;
+      color: #555;
+      font-size: 16px;
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: color 0.15s;
+    }
+    .btn-reload:hover { color: #aaa; }
+    .btn-reload.spinning { animation: spin 0.7s linear infinite; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── STATS ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .stat-card {
+      background: #0f0f0f;
+      border: 1px solid #1a1a1a;
+      border-radius: 12px;
+      padding: 14px 12px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: #555;
+      letter-spacing: 0.04em;
+    }
+
+    .stat-undone .stat-value { color: #ff6b6b; }
+    .stat-done   .stat-value { color: #69db7c; }
+    .stat-rate   .stat-value { color: #74c0fc; }
+
+    /* ── PROGRESS ── */
+    .progress-card {
+      background: #0f0f0f;
+      border: 1px solid #1a1a1a;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #555;
+      margin-bottom: 9px;
+    }
+
+    .progress-track {
+      background: #1a1a1a;
+      border-radius: 99px;
+      height: 6px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, #1c7ed6, #74c0fc);
+      transition: width 0.5s ease;
+      width: 0%;
+    }
+
+    /* ── ADD FORM ── */
+    .add-form {
+      background: #0f0f0f;
+      border: 1px solid #1a1a1a;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+    }
+
+    .add-form-label {
+      font-size: 10px;
+      color: #555;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .add-form-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .add-input {
+      flex: 1;
+      background: #141414;
+      border: 1px solid #242424;
+      border-radius: 8px;
+      color: #e0e0e0;
+      font-size: 14px;
+      font-family: inherit;
+      padding: 9px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .add-input:focus { border-color: #3a3a3a; }
+    .add-input::placeholder { color: #333; }
+
+    .priority-select {
+      background: #141414;
+      border: 1px solid #242424;
+      border-radius: 8px;
+      color: #888;
+      font-size: 12px;
+      padding: 9px 10px;
+      outline: none;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .btn-add {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      color: #74c0fc;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .btn-add:hover:not(:disabled) { background: #222; }
+    .btn-add:disabled { opacity: 0.4; cursor: default; }
+
+    .add-status {
+      font-size: 11px;
+      color: #555;
+      margin-top: 7px;
+      min-height: 14px;
+    }
+    .add-status.ok  { color: #69db7c; }
+    .add-status.err { color: #ff6b6b; }
+
+    /* ── SECTION ── */
+    .section { margin-bottom: 16px; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 4px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #141414;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #666;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section-badge {
+      font-size: 10px;
+      color: #444;
+      background: #141414;
+      border: 1px solid #1e1e1e;
+      padding: 1px 7px;
+      border-radius: 99px;
+    }
+
+    /* 完了セクションは折りたたみ */
+    .section-toggle {
+      cursor: pointer;
+    }
+    .section-toggle .section-header { cursor: pointer; }
+    .toggle-icon {
+      font-size: 10px;
+      color: #3a3a3a;
+      transition: transform 0.2s;
+      margin-left: 4px;
+    }
+    .toggle-icon.open { transform: rotate(90deg); }
+
+    .collapsible {
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height 0.3s ease;
+    }
+    .collapsible.open { max-height: 4000px; }
+
+    /* ── TASK ITEM ── */
+    .task-list { display: flex; flex-direction: column; gap: 7px; }
+
+    .task-item {
+      background: #0f0f0f;
+      border: 1px solid #1a1a1a;
+      border-radius: 10px;
+      padding: 11px 13px;
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      transition: border-color 0.15s, opacity 0.2s;
+      cursor: pointer;
+    }
+    .task-item:hover { border-color: #252525; }
+    .task-item.completed { opacity: 0.45; }
+    .task-item.loading { opacity: 0.3; pointer-events: none; }
+
+    /* チェックボックス */
+    .cb-wrap { flex-shrink: 0; padding-top: 1px; }
+
+    .cb-box {
+      width: 18px;
+      height: 18px;
+      border: 1.5px solid #303030;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s, background 0.15s;
+      background: transparent;
+    }
+    .cb-box.checked {
+      background: #1e3a1e;
+      border-color: #2f7a2f;
+    }
+    .cb-box.checked::after {
+      content: '';
+      width: 5px;
+      height: 9px;
+      border: 1.5px solid #69db7c;
+      border-left: none;
+      border-top: none;
+      transform: rotate(45deg) translate(0, -1px);
+    }
+
+    /* テキスト */
+    .task-body { flex: 1; min-width: 0; }
+
+    .task-title {
+      font-size: 14px;
+      color: #d0d0d0;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .task-item.completed .task-title {
+      text-decoration: line-through;
+      color: #404040;
+    }
+
+    .task-meta {
+      font-size: 10px;
+      color: #3a3a3a;
+      margin-top: 3px;
+    }
+
+    /* 優先度バッジ */
+    .prio-badge {
+      flex-shrink: 0;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 99px;
+      align-self: flex-start;
+      margin-top: 2px;
+      letter-spacing: 0.03em;
+    }
+    .prio-high   { background: #2a0e0e; color: #ff8787; border: 1px solid #4a1a1a; }
+    .prio-normal { background: #1e1e0a; color: #ffd43b; border: 1px solid #3a3410; }
+
+    /* ── EMPTY ── */
+    .empty {
+      text-align: center;
+      padding: 28px 16px;
+      color: #3a3a3a;
+      font-size: 13px;
+    }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      color: #ccc;
+      font-size: 12px;
+      padding: 8px 18px;
+      border-radius: 99px;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 999;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="header-left">
+      <h1>📋 タスク管理</h1>
+      <div class="date-label" id="dateLabel">—</div>
+    </div>
+    <div class="header-right">
+      <button class="btn-reload" id="btnReload" title="更新">↻</button>
+      <a href="/" class="btn-back">← チャット</a>
+    </div>
+  </header>
+
+  <!-- 統計 -->
+  <div class="stats-grid">
+    <div class="stat-card stat-undone">
+      <div class="stat-value" id="statUndone">—</div>
+      <div class="stat-label">未完了</div>
+    </div>
+    <div class="stat-card stat-done">
+      <div class="stat-value" id="statDone">—</div>
+      <div class="stat-label">完了</div>
+    </div>
+    <div class="stat-card stat-rate">
+      <div class="stat-value" id="statRate">—</div>
+      <div class="stat-label">完了率</div>
+    </div>
+  </div>
+
+  <!-- プログレスバー -->
+  <div class="progress-card">
+    <div class="progress-header">
+      <span>今日の進捗</span>
+      <span id="progressText">0 / 0</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+  </div>
+
+  <!-- タスク追加 -->
+  <div class="add-form">
+    <div class="add-form-label">＋ タスクを追加</div>
+    <div class="add-form-row">
+      <input class="add-input" type="text" id="addInput" placeholder="タスクを入力..." maxlength="100">
+      <select class="priority-select" id="addPriority">
+        <option value="通常">通常</option>
+        <option value="高">高</option>
+      </select>
+      <button class="btn-add" id="btnAdd">追加</button>
+    </div>
+    <div class="add-status" id="addStatus"></div>
+  </div>
+
+  <!-- タスクリスト -->
+  <div id="content"></div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+  const DAYS = ["日","月","火","水","木","金","土"];
+
+  function todayJST() {
+    return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  }
+
+  function formatDate(d) {
+    const [y, m, day] = d.split("-").map(Number);
+    const wd = DAYS[new Date(y, m - 1, day).getDay()];
+    return `${y}年${m}月${day}日（${wd}）`;
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const el = document.getElementById("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+  }
+
+  // ── API ──────────────────────────────────────────────────
+  async function fetchTasks(date) {
+    const r = await fetch(`/api/tasks?date=${date}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+
+  async function apiToggle(date, taskLine) {
+    const r = await fetch("/api/task-toggle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, taskLine }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+
+  async function apiAddTask(text, priority) {
+    const msg = priority === "高"
+      ? `タスクを追加 ${text} | 優先度: 高`
+      : `タスクを追加 ${text}`;
+    const r = await fetch("/api/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: msg }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    // SSEを全部読み飛ばすだけ（task_addedアクションを待つ）
+    const reader = r.body.getReader();
+    while (true) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
+  }
+
+  // ── RENDER ───────────────────────────────────────────────
+  function updateStats(stats) {
+    document.getElementById("statUndone").textContent = stats.undone;
+    document.getElementById("statDone").textContent   = stats.done;
+    document.getElementById("statRate").textContent   = stats.rate + "%";
+    document.getElementById("progressText").textContent = `${stats.done} / ${stats.total}`;
+    document.getElementById("progressFill").style.width = stats.rate + "%";
+  }
+
+  function esc(s) {
+    return s.replace(/[&<>"']/g, c =>
+      ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])
+    );
+  }
+
+  function makeTaskEl(task, date) {
+    const item = document.createElement("div");
+    item.className = "task-item" + (task.completed ? " completed" : "");
+
+    const cb = document.createElement("div");
+    cb.className = "cb-wrap";
+    const box = document.createElement("div");
+    box.className = "cb-box" + (task.completed ? " checked" : "");
+    cb.appendChild(box);
+
+    const body = document.createElement("div");
+    body.className = "task-body";
+
+    const title = document.createElement("div");
+    title.className = "task-title";
+    title.textContent = task.title;
+
+    const meta = document.createElement("div");
+    meta.className = "task-meta";
+    const parts = [];
+    if (task.addedAt) parts.push(`追加 ${task.addedAt}`);
+    if (task.doneAt)  parts.push(`完了 ${task.doneAt}`);
+    meta.textContent = parts.join("  ·  ");
+
+    body.appendChild(title);
+    if (parts.length) body.appendChild(meta);
+    item.appendChild(cb);
+    item.appendChild(body);
+
+    if (task.priority) {
+      const badge = document.createElement("span");
+      badge.className = "prio-badge " + (task.priority === "高" ? "prio-high" : "prio-normal");
+      badge.textContent = task.priority;
+      item.appendChild(badge);
+    }
+
+    let currentLine = task.rawLine;
+
+    item.addEventListener("click", async () => {
+      item.classList.add("loading");
+      try {
+        const res = await apiToggle(date, currentLine);
+        if (res.ok) {
+          currentLine = res.newLine;
+          const nowDone = res.completed;
+          box.className = "cb-box" + (nowDone ? " checked" : "");
+          item.classList.toggle("completed", nowDone);
+          title.style.textDecoration = nowDone ? "line-through" : "";
+          title.style.color = nowDone ? "#404040" : "";
+          toast(nowDone ? "✔ 完了しました" : "↩ 未完了に戻しました");
+          // 統計だけ更新（リロード不要）
+          await refreshStats(date);
+        }
+      } catch {
+        toast("エラーが発生しました");
+      }
+      item.classList.remove("loading");
+    });
+
+    return item;
+  }
+
+  async function refreshStats(date) {
+    try {
+      const data = await fetchTasks(date);
+      updateStats(data.stats);
+    } catch {}
+  }
+
+  function makeSection(sec, key, date, collapsible) {
+    const section = document.createElement("div");
+    section.className = "section" + (collapsible ? " section-toggle" : "");
+
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.innerHTML = `
+      <span class="section-title">
+        ${sec.emoji} ${sec.label}
+        ${collapsible ? '<span class="toggle-icon" id="icon_${key}">▶</span>' : ""}
+      </span>
+      <span class="section-badge">${sec.tasks.length}</span>
+    `;
+
+    const bodyWrap = document.createElement("div");
+    if (collapsible) {
+      bodyWrap.className = "collapsible";
+      bodyWrap.id = `body_${key}`;
+    }
+
+    const list = document.createElement("div");
+    list.className = "task-list";
+
+    if (sec.tasks.length === 0) {
+      list.innerHTML = `<div class="empty">タスクなし</div>`;
+    } else {
+      sec.tasks.forEach(t => list.appendChild(makeTaskEl(t, date)));
+    }
+
+    bodyWrap.appendChild(list);
+    section.appendChild(header);
+    section.appendChild(bodyWrap);
+
+    if (collapsible) {
+      header.addEventListener("click", () => {
+        const body = document.getElementById(`body_${key}`);
+        const icon = header.querySelector(".toggle-icon");
+        const isOpen = body.classList.toggle("open");
+        if (icon) icon.classList.toggle("open", isOpen);
+      });
+    }
+
+    return section;
+  }
+
+  function render(data) {
+    document.getElementById("dateLabel").textContent = formatDate(data.date);
+    updateStats(data.stats);
+
+    const content = document.getElementById("content");
+    content.innerHTML = "";
+
+    const date = data.date;
+    const { high, normal, done } = data.sections;
+
+    // 高優先度（タスクがある場合のみ）
+    if (high.tasks.length > 0) {
+      content.appendChild(makeSection(high, "high", date, false));
+    }
+
+    // 通常
+    content.appendChild(makeSection(normal, "normal", date, false));
+
+    // 完了（折りたたみ）
+    if (done.tasks.length > 0 || high.tasks.some(t => t.completed) || normal.tasks.some(t => t.completed)) {
+      // 完了タスクをdoneセクションに集める（high/normalの完了分も表示）
+      const allDone = {
+        ...done,
+        tasks: [
+          ...high.tasks.filter(t => t.completed),
+          ...normal.tasks.filter(t => t.completed),
+          ...done.tasks,
+        ],
+      };
+      if (allDone.tasks.length > 0) {
+        content.appendChild(makeSection(allDone, "done", date, true));
+      }
+    }
+  }
+
+  // ── LOAD ─────────────────────────────────────────────────
+  async function load() {
+    const btn = document.getElementById("btnReload");
+    btn.classList.add("spinning");
+    try {
+      const data = await fetchTasks(todayJST());
+      render(data);
+    } catch (e) {
+      document.getElementById("content").innerHTML =
+        `<div class="empty">読み込み失敗: ${e.message}</div>`;
+    }
+    btn.classList.remove("spinning");
+  }
+
+  // ── ADD TASK ─────────────────────────────────────────────
+  async function addTask() {
+    const input    = document.getElementById("addInput");
+    const priority = document.getElementById("addPriority").value;
+    const text     = input.value.trim();
+    if (!text) { input.focus(); return; }
+
+    const btn    = document.getElementById("btnAdd");
+    const status = document.getElementById("addStatus");
+    btn.disabled = true;
+    status.textContent = "追加中…";
+    status.className   = "add-status";
+
+    try {
+      await apiAddTask(text, priority);
+      input.value = "";
+      status.textContent = "追加しました";
+      status.className   = "add-status ok";
+      toast("タスクを追加しました");
+      await load();
+    } catch (e) {
+      status.textContent = "エラー: " + e.message;
+      status.className   = "add-status err";
+    } finally {
+      btn.disabled = false;
+      setTimeout(() => { status.textContent = ""; status.className = "add-status"; }, 4000);
+    }
+  }
+
+  document.getElementById("btnAdd").addEventListener("click", addTask);
+  document.getElementById("addInput").addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.isComposing) addTask();
+  });
+  document.getElementById("btnReload").addEventListener("click", load);
+
+  load();
+</script>
+</body>
+</html>

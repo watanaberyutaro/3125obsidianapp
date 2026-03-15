@@ -7,7 +7,10 @@
     "api/notify-all.js": { "maxDuration": 15 },
     "api/notify.js": { "maxDuration": 10 },
     "api/subscribe.js": { "maxDuration": 10 },
-    "api/vapid-public-key.js": { "maxDuration": 5 }
+    "api/vapid-public-key.js": { "maxDuration": 5 },
+    "api/tasks.js": { "maxDuration": 10 },
+    "api/task-toggle.js": { "maxDuration": 10 },
+    "api/calendar-events.js": { "maxDuration": 15 }
   }
 }
 

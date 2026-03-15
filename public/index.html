@@ -340,6 +340,21 @@
       line-height: 1;
     }
 
+    .btn-dashboard {
+      background: #141414;
+      border: 1px solid #242424;
+      color: #666;
+      font-size: 12px;
+      padding: 5px 11px;
+      border-radius: 8px;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .btn-dashboard:hover { color: #aaa; border-color: #3a3a3a; }
+
     /* ── タスクリスト ── */
     .task-list {
       background: #141414;
@@ -450,6 +465,7 @@
       <p>AIエージェント</p>
     </div>
     <div class="header-actions">
+      <a href="/dashboard.html" class="btn-dashboard" title="タスクダッシュボード">📋 タスク</a>
       <button id="notifBtn" onclick="toggleNotifications()" title="通知設定">
         🔔
         <div id="badgeCount"></div>
