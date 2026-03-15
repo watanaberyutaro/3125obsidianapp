@@ -44,17 +44,24 @@ async function addCalendarLog(title, description, link, startTime, endTime) {
   const start = startTime ? new Date(startTime) : new Date();
   const end   = endTime   ? new Date(endTime)   : new Date(start.getTime() + 15 * 60 * 1000);
   const fullDescription = [description, link ? `🔗 ${link}` : ""].filter(Boolean).join("\n\n");
-  // startTimeが指定された場合は「予定」→ デフォルト色（colorId指定なし）
-  // startTime未指定の場合は「ログ」→ グラファイト（colorId: "8"）
+
+  // startTime あり → 予定カレンダー / なし → ログカレンダー
+  // 専用環境変数が未設定の場合は GOOGLE_CALENDAR_ID にフォールバック
+  const isSchedule = !!startTime;
+  const calendarId = isSchedule
+    ? (process.env.GOOGLE_CALENDAR_ID_SCHEDULE || process.env.GOOGLE_CALENDAR_ID)
+    : (process.env.GOOGLE_CALENDAR_ID_LOG      || process.env.GOOGLE_CALENDAR_ID);
+
   const eventBody = {
     summary: title,
     description: fullDescription,
     start: { dateTime: start.toISOString(), timeZone: "Asia/Tokyo" },
     end:   { dateTime: end.toISOString(),   timeZone: "Asia/Tokyo" },
   };
-  if (!startTime) eventBody.colorId = "8"; // ログのみグレー
+  if (!isSchedule) eventBody.colorId = "8"; // ログはグレー
+
   await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(process.env.GOOGLE_CALENDAR_ID)}/events`,
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
