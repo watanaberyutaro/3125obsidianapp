@@ -339,6 +339,97 @@
       font-weight: 400 !important;
       line-height: 1;
     }
+
+    /* ── タスクリスト ── */
+    .task-list {
+      background: #141414;
+      border: 1px solid #202020;
+      border-radius: 16px;
+      border-bottom-left-radius: 4px;
+      padding: 12px 14px;
+      min-width: 220px;
+      max-width: 300px;
+    }
+
+    .task-list-header {
+      font-size: 11px;
+      color: #555;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #1e1e1e;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .task-list-count {
+      margin-left: auto;
+      background: #1a1a1a;
+      border: 1px solid #272727;
+      border-radius: 10px;
+      padding: 1px 7px;
+      font-size: 10px;
+      color: #555;
+    }
+
+    .task-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 7px 0;
+      border-bottom: 1px solid #1a1a1a;
+      cursor: pointer;
+    }
+
+    .task-item:last-child { border-bottom: none; }
+
+    .task-item input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 17px;
+      height: 17px;
+      border: 1.5px solid #3a3a3a;
+      border-radius: 4px;
+      flex-shrink: 0;
+      cursor: pointer;
+      margin-top: 1px;
+      position: relative;
+      transition: background 0.15s, border-color 0.15s;
+      background: transparent;
+    }
+
+    .task-item input[type="checkbox"]:checked {
+      background: #2a2a2a;
+      border-color: #555;
+    }
+
+    .task-item input[type="checkbox"]:checked::after {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 1px;
+      width: 5px;
+      height: 9px;
+      border: 1.5px solid #aaa;
+      border-top: none;
+      border-left: none;
+      transform: rotate(45deg);
+    }
+
+    .task-item-text {
+      font-size: 13px;
+      line-height: 1.5;
+      color: #d0d0d0;
+      flex: 1;
+      word-break: break-word;
+    }
+
+    .task-item-text.done {
+      text-decoration: line-through;
+      color: #3a3a3a;
+    }
+
+    .task-item.loading { opacity: 0.5; pointer-events: none; }
   </style>
 </head>
 <body>
@@ -648,7 +739,75 @@
       if (action === 'calendar')   return '✓  カレンダーに登録';
       if (action === 'queued')     return '⏳  Claude Code起動時に処理';
       if (action === 'researched') return '✓  リサーチ完了・保存済み';
+      if (action === 'task_added') return '✓  TODOに追加';
       return null;
+    }
+
+    function renderTaskList(tasks, date) {
+      const pending = tasks.filter(t => !t.completed);
+      const done    = tasks.filter(t => t.completed);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'task-list';
+
+      const header = document.createElement('div');
+      header.className = 'task-list-header';
+      header.innerHTML = '📋 今日のタスク';
+      const counter = document.createElement('span');
+      counter.className = 'task-list-count';
+      counter.textContent = `${done.length} / ${tasks.length} 完了`;
+      header.appendChild(counter);
+      wrap.appendChild(header);
+
+      // タスク行を生成（未完了→完了の順）
+      const ordered = [...pending, ...done];
+      for (const task of ordered) {
+        const row = document.createElement('label');
+        row.className = 'task-item';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = task.completed;
+
+        const label = document.createElement('span');
+        label.className = 'task-item-text' + (task.completed ? ' done' : '');
+        // タスクテキストから "| 優先度: ..." 以降を除いて表示
+        label.textContent = task.text.replace(/\s*\|.*$/, '').trim();
+
+        // currentLine はトグル後に更新するためlet
+        let currentLine = task.line;
+
+        cb.addEventListener('change', async () => {
+          row.classList.add('loading');
+          try {
+            const res = await fetch('/api/task-toggle', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ date, taskLine: currentLine })
+            });
+            const data = await res.json();
+            if (data.ok) {
+              currentLine = data.newLine;
+              label.classList.toggle('done', data.completed);
+              cb.checked = data.completed;
+              // カウンター更新
+              const checked = wrap.querySelectorAll('input[type="checkbox"]:checked').length;
+              counter.textContent = `${checked} / ${tasks.length} 完了`;
+            } else {
+              cb.checked = !cb.checked; // revert
+            }
+          } catch {
+            cb.checked = !cb.checked; // revert on error
+          }
+          row.classList.remove('loading');
+        });
+
+        row.appendChild(cb);
+        row.appendChild(label);
+        wrap.appendChild(row);
+      }
+
+      return wrap;
     }
 
     async function send() {
@@ -707,6 +866,38 @@
           if (!line.startsWith('data: ')) continue;
           let event;
           try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+          if (event.tasks) {
+            removeTyping();
+            if (isFirstMessage) {
+              document.querySelector('.welcome')?.remove();
+              isFirstMessage = false;
+            }
+            divEl = document.createElement('div');
+            divEl.className = 'message assistant';
+
+            const rowEl = document.createElement('div');
+            rowEl.className = 'message-row';
+
+            const iconEl = document.createElement('img');
+            iconEl.src = '/frieren.jpg';
+            iconEl.className = 'assistant-icon';
+            iconEl.alt = 'フリーレン';
+
+            rowEl.appendChild(iconEl);
+            rowEl.appendChild(renderTaskList(event.tasks, event.date));
+            divEl.appendChild(rowEl);
+
+            metaEl = document.createElement('div');
+            metaEl.className = 'message-meta';
+            metaEl.style.marginLeft = '40px';
+            metaEl.textContent = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+            divEl.appendChild(metaEl);
+
+            messages.appendChild(divEl);
+            messages.scrollTop = messages.scrollHeight;
+            started = true;
+          }
 
           if (event.text) {
             if (!started) {

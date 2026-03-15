@@ -428,6 +428,36 @@ async function runAgentStream(userMessage, res) {
     return;
   }
 
+  // ── タスク確認：直接TODOを解析してタスクリストを返す ──────────────
+  if (isTaskRead) {
+    const todayPath = `.company/secretary/todos/${todayISO}.md`;
+    const existing  = await ghGet(todayPath);
+    if (!existing) {
+      send({ text: "…今日のタスクはないわ。" });
+      send({ done: true, action: null });
+      res.end();
+      return;
+    }
+    const content = Buffer.from(existing.content, "base64").toString("utf-8");
+    const tasks = [];
+    for (const line of content.split("\n")) {
+      const pendingMatch = line.match(/^- \[ \] (.+)/);
+      const doneMatch    = line.match(/^- \[x\] (.+)/);
+      if (pendingMatch) tasks.push({ text: pendingMatch[1], completed: false, line });
+      else if (doneMatch) tasks.push({ text: doneMatch[1], completed: true, line });
+    }
+    if (!tasks.length) {
+      send({ text: "…今日のタスクはないわ。" });
+      send({ done: true, action: null });
+      res.end();
+      return;
+    }
+    send({ tasks, date: todayISO });
+    send({ done: true, action: "tasks" });
+    res.end();
+    return;
+  }
+
   if (!isInstant) {
     // キューに直接保存（Claude API不使用）
     const cls   = classifyTask(userMessage);
