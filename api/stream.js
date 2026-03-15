@@ -375,6 +375,8 @@ function classifyTask(msg) {
     return { type: "coding",           dept: "開発部",       folder: "3125エンジニアリング事業部" };
   if (/メモ|覚えて|記録|覚書/.test(msg))
     return { type: "memo",             dept: "秘書室",       folder: "3125情報受付事業部" };
+  if (/^タスクを?追加|^todo追加|^タスク追加/i.test(msg.trim()))
+    return { type: "task",             dept: "秘書室",       folder: "3125情報受付事業部" };
   return   { type: "general",          dept: "秘書室",       folder: "3125情報受付事業部" };
 }
 
@@ -393,7 +395,38 @@ async function runAgentStream(userMessage, res) {
   const isCalendarAdd  = /予定|カレンダー|会議|ミーティング/.test(userMessage) && /追加|入れて|登録|作って/.test(userMessage);
   const isCalendarRead = /予定|スケジュール/.test(userMessage) && /は|教えて|確認|見せて/.test(userMessage) && !isCalendarAdd;
   const isTaskRead     = /タスク|todo|やること/.test(lower) && /教えて|確認|見せて|一覧|ある|は/.test(lower);
+  const isTaskAdd      = /^タスクを?追加|^todo追加|^タスク追加/i.test(userMessage.trim());
   const isInstant      = isCalendarAdd || isCalendarRead || isTaskRead;
+
+  // ── タスク追加：即時TODOファイルに書き込む ──────────────────────
+  if (isTaskAdd) {
+    const taskContent = userMessage.replace(/^タスクを?追加\s*/i, "").replace(/^todo追加\s*/i, "").replace(/^タスク追加\s*/i, "").trim() || userMessage;
+    const todayDate = new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "-");
+    const todayPath = `.company/secretary/todos/${todayISO}.md`;
+    const existing  = await ghGet(todayPath);
+    let fileContent;
+    if (existing) {
+      let body = Buffer.from(existing.content, "base64").toString("utf-8");
+      const newLine = `- [ ] ${taskContent} | 優先度: 通常 | 追加: ${todayISO}`;
+      if (body.includes("（なし）\n\n---\n\n## ✅")) {
+        body = body.replace("（なし）\n\n---\n\n## ✅", `${newLine}\n\n---\n\n## ✅`);
+      } else if (body.includes("## 🟡 優先度: 通常\n\n（なし）")) {
+        body = body.replace("## 🟡 優先度: 通常\n\n（なし）", `## 🟡 優先度: 通常\n\n${newLine}`);
+      } else {
+        body = body.replace("## 🟡 優先度: 通常\n", `## 🟡 優先度: 通常\n${newLine}\n`);
+      }
+      fileContent = body;
+    } else {
+      fileContent = `# 📋 やることリスト ${todayISO}\n\n最終更新: ${todayISO}\n\n---\n\n## 🔴 優先度: 高\n\n（なし）\n\n---\n\n## 🟡 優先度: 通常\n\n- [ ] ${taskContent} | 優先度: 通常 | 追加: ${todayISO}\n\n---\n\n## ✅ 本日完了\n\n`;
+    }
+    await ghPut(todayPath, fileContent);
+    const replyText = `…追加しておいた。「${taskContent}」ね。`;
+    appendHistory(history, userMessage, replyText).catch(() => {});
+    send({ text: replyText });
+    send({ done: true, action: "task_added" });
+    res.end();
+    return;
+  }
 
   if (!isInstant) {
     // キューに直接保存（Claude API不使用）
