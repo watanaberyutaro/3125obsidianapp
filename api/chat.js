@@ -153,7 +153,8 @@ async function calendarList(dateISO) {
   const token = await getGoogleToken();
   const timeMin = new Date(dateISO + "T00:00:00+09:00").toISOString();
   const timeMax = new Date(dateISO + "T23:59:59+09:00").toISOString();
-  const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(process.env.GOOGLE_CALENDAR_ID)}/events`);
+  const calendarId = process.env.GOOGLE_CALENDAR_ID_SCHEDULE || process.env.GOOGLE_CALENDAR_ID;
+  const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`);
   url.searchParams.set("timeMin", timeMin);
   url.searchParams.set("timeMax", timeMax);
   url.searchParams.set("singleEvents", "true");
@@ -175,8 +176,9 @@ async function calendarAdd(title, description, datetime) {
   const token = await getGoogleToken();
   const startTime = toJSTDate(datetime);
   const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+  const calendarId = process.env.GOOGLE_CALENDAR_ID_SCHEDULE || process.env.GOOGLE_CALENDAR_ID;
   const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(process.env.GOOGLE_CALENDAR_ID)}/events`,
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
