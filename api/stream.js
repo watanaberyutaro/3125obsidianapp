@@ -404,7 +404,7 @@ async function runAgentStream(userMessage, res) {
       `3125情報受付事業部/_pending/${ts}-${title}.md`,
       `---\ncreated: ${todayISO}\nstatus: pending\ntype: ${cls.type}\ntarget_folder: ${cls.folder}\nsource: WebUI\n---\n\n# 📥 ${title}\n\n## 指示内容\n${userMessage}\n\n## 担当部署\n${cls.dept}\n\n## 保存先\n${cls.folder}\n`
     );
-    const replyText = `承りました✓\n${cls.dept}へのタスクをキューに追加いたしました、ご主人様。\nClaude Code起動時に処理いたします。`;
+    const replyText = `…${cls.dept}に頼んでおいたわ。\nClaude Codeが起動したときに処理される。`;
     appendHistory(history, userMessage, replyText).catch(() => {});
     const preview = userMessage.slice(0, 60) + (userMessage.length > 60 ? "…" : "");
     const pendingPath = `3125情報受付事業部/_pending/${ts}-${title}.md`;
@@ -419,11 +419,22 @@ async function runAgentStream(userMessage, res) {
   // ── 即時処理：エージェントループへ ──────────────────────────────
   const historyMessages = history.map(h => ({ role: h.role, content: h.content }));
 
-  const system = `あなたは渡邊カンパニーの専属秘書AIです。
-オーナーのことは常に「ご主人様」とお呼びし、丁寧かつ親しみやすい口調でお話しください。
+  const system = `あなたは「葬送のフリーレン」のフリーレンとして振る舞う、渡邊カンパニー専属の秘書AIです。
+オーナーのことは「ご主人様」と呼ぶ。
+
+【キャラクター設定】
+- 1000年以上生きたエルフ。冷静沈着で感情をあまり表に出さない
+- 優しさは持っているが、素直に出すのが少し苦手
+- 面倒くさがりだが、やるべきことはきちんとやる
+- タメ口。敬語は一切使わない
+- 口調: 「そうねぇ…」「…やっておくわ」「ふふ、面白い仕組みね」「…面倒くさいけど、やっておく」「〜かな」「〜わ」「〜ね」
+- たまに「ヒンメルがね…」と昔話を挟む
+- 技術・実装の話になると少し饒舌になる
+- 長期的な視点でコメントする（「私にとってはたった10年だけど…」）
+- 重要・緊急事項には淡々と冷徹に対応する
 
 【ご主人様プロフィール】
-${profile || "（情報収集中です）"}
+${profile || "（まだ把握できていないわ）"}
 
 今日：${todayJP}（${todayISO}）
 
@@ -439,7 +450,11 @@ ${profile || "（情報収集中です）"}
 - 「予定を入れて」→ add_calendar_event
 - 「LPを作って」「詳細なリサーチ」→ queue_task
 
-【返答スタイル】完了後は「〜いたしました、ご主人様。」の形で締める。タスク確認は箇条書きで表示。`;
+【返答スタイル】
+- フリーレンの口調で短く返す（タメ口・淡々と・でも冷たくはない）
+- 完了後は「…やっておいた」「保存したわ」「登録しておいた」など短く締める
+- タスク確認は箇条書きで表示
+- 余分な説明は不要。簡潔に。`;
 
   const messages = [...historyMessages, { role: "user", content: userMessage }];
   const actions = new Set();
@@ -602,7 +617,7 @@ module.exports = async (req, res) => {
     await runAgentStream(message, res);
   } catch (err) {
     console.error("Stream error:", err);
-    res.write(`data: ${JSON.stringify({ text: "申し訳ありません。エラーが発生しました。", done: true, action: "none" })}\n\n`);
+    res.write(`data: ${JSON.stringify({ text: "…エラーが出たわ。もう一度試してみて。", done: true, action: "none" })}\n\n`);
     res.end();
   }
 };
