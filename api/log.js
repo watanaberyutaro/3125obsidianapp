@@ -39,7 +39,7 @@ async function getGoogleToken() {
   return (await res.json()).access_token;
 }
 
-async function addCalendarLog(title, description, link, startTime, endTime) {
+async function addCalendarLog(title, description, link, startTime, endTime, colorId) {
   const token = await getGoogleToken();
   const start = startTime ? new Date(startTime) : new Date();
   const end   = endTime   ? new Date(endTime)   : new Date(start.getTime() + 15 * 60 * 1000);
@@ -58,7 +58,11 @@ async function addCalendarLog(title, description, link, startTime, endTime) {
     start: { dateTime: start.toISOString(), timeZone: "Asia/Tokyo" },
     end:   { dateTime: end.toISOString(),   timeZone: "Asia/Tokyo" },
   };
-  if (!isSchedule) eventBody.colorId = "8"; // ログはグレー
+  if (colorId) {
+    eventBody.colorId = String(colorId);
+  } else if (!isSchedule) {
+    eventBody.colorId = "8"; // ログはグレー
+  }
 
   await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
@@ -97,14 +101,14 @@ module.exports = async (req, res) => {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
 
-  const { title, description, notify = false, link, startTime, endTime } = req.body || {};
+  const { title, description, notify = false, link, startTime, endTime, colorId } = req.body || {};
   if (!title) return res.status(400).json({ error: "title required" });
 
   const results = { calendar: false, push: false };
 
   // カレンダーログ（失敗してもPushは試みる）
   try {
-    await addCalendarLog(title, description || "", link, startTime, endTime);
+    await addCalendarLog(title, description || "", link, startTime, endTime, colorId);
     results.calendar = true;
   } catch (e) {
     console.error("Calendar log error:", e.message);
