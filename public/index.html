@@ -107,6 +107,21 @@
     .message.user      { align-self: flex-end;   align-items: flex-end; }
     .message.assistant { align-self: flex-start;  align-items: flex-start; }
 
+    .message-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .assistant-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 1px solid #2a2a2a;
+    }
+
     .bubble {
       padding: 11px 15px;
       border-radius: 16px;
@@ -562,28 +577,55 @@
       const div = document.createElement('div');
       div.className = `message ${role}`;
 
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      bubble.textContent = text;
-      div.appendChild(bubble);
+      if (role === 'assistant') {
+        const row = document.createElement('div');
+        row.className = 'message-row';
 
-      if (badgeLabel) {
-        const b = document.createElement('span');
-        b.className = 'badge';
-        b.textContent = badgeLabel;
-        div.appendChild(b);
+        const icon = document.createElement('img');
+        icon.src = '/frieren.jpg';
+        icon.className = 'assistant-icon';
+        icon.alt = 'フリーレン';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        bubble.textContent = text;
+
+        row.appendChild(icon);
+        row.appendChild(bubble);
+        div.appendChild(row);
+
+        if (badgeLabel) {
+          const b = document.createElement('span');
+          b.className = 'badge';
+          b.textContent = badgeLabel;
+          b.style.marginLeft = '40px';
+          div.appendChild(b);
+        }
+      } else {
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        bubble.textContent = text;
+        div.appendChild(bubble);
+
+        if (badgeLabel) {
+          const b = document.createElement('span');
+          b.className = 'badge';
+          b.textContent = badgeLabel;
+          div.appendChild(b);
+        }
       }
 
       const meta = document.createElement('div');
       meta.className = 'message-meta';
       meta.textContent = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+      if (role === 'assistant') meta.style.marginLeft = '40px';
       div.appendChild(meta);
 
       messages.appendChild(div);
       messages.scrollTop = messages.scrollHeight;
 
       if (role === 'assistant' && document.hidden) incrementBadge();
-      return { div, bubble, meta };
+      return { div, bubble: div.querySelector('.bubble'), meta };
     }
 
     function showTyping() {
@@ -667,20 +709,35 @@
           if (event.text) {
             if (!started) {
               removeTyping();
-              // Create assistant bubble
+              // Create assistant bubble with icon
               if (isFirstMessage) {
                 document.querySelector('.welcome')?.remove();
                 isFirstMessage = false;
               }
               divEl = document.createElement('div');
               divEl.className = 'message assistant';
+
+              const rowEl = document.createElement('div');
+              rowEl.className = 'message-row';
+
+              const iconEl = document.createElement('img');
+              iconEl.src = '/frieren.jpg';
+              iconEl.className = 'assistant-icon';
+              iconEl.alt = 'フリーレン';
+
               bubbleEl = document.createElement('div');
               bubbleEl.className = 'bubble';
+
+              rowEl.appendChild(iconEl);
+              rowEl.appendChild(bubbleEl);
+              divEl.appendChild(rowEl);
+
               metaEl = document.createElement('div');
               metaEl.className = 'message-meta';
+              metaEl.style.marginLeft = '40px';
               metaEl.textContent = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-              divEl.appendChild(bubbleEl);
               divEl.appendChild(metaEl);
+
               messages.appendChild(divEl);
               started = true;
             }
@@ -692,7 +749,7 @@
           if (event.done) {
             if (!started) {
               removeTyping();
-              if (!fullText) fullText = '完了しました✓';
+              if (!fullText) fullText = '…やっておいた。';
               addMessage('assistant', fullText, badgeLabel(event.action));
             } else {
               const label = badgeLabel(event.action);
@@ -700,6 +757,7 @@
                 const b = document.createElement('span');
                 b.className = 'badge';
                 b.textContent = label;
+                b.style.marginLeft = '40px';
                 divEl.insertBefore(b, metaEl);
               }
               if (document.hidden) incrementBadge();
