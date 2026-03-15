@@ -85,7 +85,7 @@ module.exports = async (req, res) => {
   if (req.method !== "GET") return res.status(405).json({ error: "GET only" });
 
   const date = req.query?.date || new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
-  const path = `.company/secretary/todos/${date}.md`;
+  const path = `📋 タスク/${date}.md`;
 
   const data = await ghGet(path);
   if (!data) return res.status(200).json(emptyData(date));

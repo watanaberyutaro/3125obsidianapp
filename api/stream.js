@@ -402,7 +402,7 @@ async function runAgentStream(userMessage, res) {
   if (isTaskAdd) {
     const taskContent = userMessage.replace(/^タスクを?追加\s*/i, "").replace(/^todo追加\s*/i, "").replace(/^タスク追加\s*/i, "").trim() || userMessage;
     const todayDate = new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "-");
-    const todayPath = `.company/secretary/todos/${todayISO}.md`;
+    const todayPath = `📋 タスク/${todayISO}.md`;
     const existing  = await ghGet(todayPath);
     let fileContent;
     if (existing) {
@@ -430,7 +430,7 @@ async function runAgentStream(userMessage, res) {
 
   // ── タスク確認：直接TODOを解析してタスクリストを返す ──────────────
   if (isTaskRead) {
-    const todayPath = `.company/secretary/todos/${todayISO}.md`;
+    const todayPath = `📋 タスク/${todayISO}.md`;
     const existing  = await ghGet(todayPath);
     if (!existing) {
       send({ text: "…今日のタスクはないわ。" });
@@ -505,7 +505,7 @@ ${profile || "（まだ把握できていないわ）"}
 過去の会話履歴を参照して文脈を把握した上で返答すること。
 
 【ツール使用ガイド】
-- 「今日のタスクは？」→ read_obsidian_file: .company/secretary/todos/${todayISO}.md
+- 「今日のタスクは？」→ read_obsidian_file: 📋 タスク/${todayISO}.md
 - 「最近のメモ/アイデア確認」→ list_obsidian_folder → read_obsidian_file
 - 「〇〇を調査して」→ web_search → save_to_obsidian: 3125市場調査事業部/タイトル.md
 - 「メモを残して」→ save_to_obsidian: 3125情報受付事業部/${todayISO}-タイトル.md
