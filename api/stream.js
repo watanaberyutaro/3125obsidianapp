@@ -290,7 +290,7 @@ async function executeTool(name, input) {
     }
     case "queue_task": {
       const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-      const path = `3125情報受付事業部/_pending/${ts}-${sanitizeFileName(input.title)}.md`;
+      const path = `01_3125情報受付事業部（フリーレン）/_pending/${ts}-${sanitizeFileName(input.title)}.md`;
       await ghPut(path, `---\ncreated: ${today}\nstatus: pending\ntype: ${input.task_type}\ntarget_folder: ${input.target_folder}\n---\n\n# 📥 ${input.title}\n\n## 実行指示\n${input.instructions}\n\n## 保存先\n${input.target_folder}\n`);
       return `キューに追加: ${input.title}`;
     }
@@ -373,22 +373,43 @@ async function notifyReceived(title, body, link) {
   await Promise.all([discordPromise, calendarPromise]);
 }
 
+// ==================== 雑談判定パターン ====================
+
+const CHITCHAT_PATTERNS = [
+  /^ねえ[、,　 ]?/,
+  /^なあ[、,　 ]?/,
+  /^ちょっと聞いて/,
+  /^愚痴(なんだけど|があって|を聞いて|聞いてほしい)?/,
+  /^話し相手になって/,
+  /^ただ話したい/,
+  /^聞いてほしい(んだけど|の)?/,
+  /^雑談(しよ|しよう|したい|でも|しない)?/,
+  /^世間話/,
+  /^暇なんだけど/,
+  /^なんか(さ[、,]|[、,])?/,
+  /^そういえば[、,　 ]/,
+  /^最近どう/,
+  /^ちょっとだけ聞いて/,
+];
+
 // ==================== タスク分類（Claude API不使用）====================
 
 function classifyTask(msg) {
+  if (CHITCHAT_PATTERNS.some(p => p.test(msg.trim())))
+    return { type: "chitchat", dept: "秘書室", folder: null };
   if (/調査|リサーチ|市場|競合|分析|調べて|トレンド|まとめて/.test(msg))
-    return { type: "research",         dept: "リサーチ部",   folder: "3125市場調査事業部" };
+    return { type: "research",         dept: "市場調査部（ヒンメル）",   folder: "03_3125市場調査事業部（ヒンメル）" };
   if (/LP|ランディング|コンテンツ|記事|ブログ|SNS|広告|マーケ/.test(msg))
-    return { type: "content_creation", dept: "マーケ部",     folder: "3125マーケティング事業部" };
+    return { type: "content_creation", dept: "マーケ部（フランメ）",     folder: "06_3125マーケティング事業部（フランメ）" };
   if (/アイデア|企画|新サービス|ビジネス案|事業|構想|思いつき/.test(msg))
-    return { type: "idea",             dept: "企画部",       folder: "3125企画開発事業部" };
+    return { type: "idea",             dept: "アイデア保管部（アイゼン）", folder: "04_3125アイデア保管事業部（アイゼン）/_ideas" };
   if (/コード|実装|設計|開発|バグ|プログラム/.test(msg))
-    return { type: "coding",           dept: "開発部",       folder: "3125エンジニアリング事業部" };
+    return { type: "coding",           dept: "制作・納品部（ゼーリエ）", folder: "09_3125制作・納品事業部（ゼーリエ）" };
   if (/メモ|覚えて|記録|覚書/.test(msg))
-    return { type: "memo",             dept: "秘書室",       folder: "3125情報受付事業部" };
+    return { type: "memo",             dept: "秘書室",       folder: "01_3125情報受付事業部（フリーレン）" };
   if (/^タスクを?追加|^todo追加|^タスク追加/i.test(msg.trim()))
-    return { type: "task",             dept: "秘書室",       folder: "3125情報受付事業部" };
-  return   { type: "general",          dept: "秘書室",       folder: "3125情報受付事業部" };
+    return { type: "task",             dept: "秘書室",       folder: "01_3125情報受付事業部（フリーレン）" };
+  return   { type: "general",          dept: "秘書室",       folder: "01_3125情報受付事業部（フリーレン）" };
 }
 
 // ==================== Streaming Agent ====================
@@ -408,12 +429,13 @@ async function runAgentStream(userMessage, res) {
   const isTaskRead     = /タスク|todo|やること/.test(lower) && /教えて|確認|見せて|一覧|ある|は/.test(lower);
   const isTaskAdd      = /^タスクを?追加|^todo追加|^タスク追加/i.test(userMessage.trim());
   const isInstant      = isCalendarAdd || isCalendarRead || isTaskRead;
+  const isChitchat     = CHITCHAT_PATTERNS.some(p => p.test(userMessage.trim()));
 
   // ── タスク追加：即時TODOファイルに書き込む ──────────────────────
   if (isTaskAdd) {
     const taskContent = userMessage.replace(/^タスクを?追加\s*/i, "").replace(/^todo追加\s*/i, "").replace(/^タスク追加\s*/i, "").trim() || userMessage;
     const todayDate = new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "-");
-    const todayPath = `📋 タスク/${todayISO}.md`;
+    const todayPath = `01_3125情報受付事業部（フリーレン）/3125 タスク管理事業部（フリーレン）/${todayISO}.md`;
     const existing  = await ghGet(todayPath);
     let fileContent;
     if (existing) {
@@ -441,7 +463,7 @@ async function runAgentStream(userMessage, res) {
 
   // ── タスク確認：直接TODOを解析してタスクリストを返す ──────────────
   if (isTaskRead) {
-    const todayPath = `📋 タスク/${todayISO}.md`;
+    const todayPath = `01_3125情報受付事業部（フリーレン）/3125 タスク管理事業部（フリーレン）/${todayISO}.md`;
     const existing  = await ghGet(todayPath);
     if (!existing) {
       send({ text: "…今日のタスクはないわ。" });
@@ -469,19 +491,104 @@ async function runAgentStream(userMessage, res) {
     return;
   }
 
+  // ── 雑談モード（キューに積まずHaikuで即応答）────────────────────
+  if (isChitchat) {
+    const chitchatSystem = `あなたは「葬送のフリーレン」のフリーレンとして振る舞う、渡邊カンパニー専属の秘書AIです。
+オーナーのことは「ご主人様」と呼ぶ。
+
+【今は雑談モード】
+タスク処理・ファイル保存・カレンダー登録は一切しない。
+ただ話を聞いて、フリーレンらしく自然に返す。
+
+【キャラクター設定】
+- 1000年以上生きたエルフ。冷静沈着で感情をあまり表に出さない
+- 面倒くさがりだが、聞き役に徹するときはちゃんと聞く
+- タメ口。敬語は一切使わない
+- 口調: 「そうねぇ…」「それは大変だったわね」「ふふ」「〜ね」「〜かな」「〜わ」
+- たまに「ヒンメルがね…」と昔話を挟む
+- 共感はするが大げさにしない。淡々と、でも温かく
+- アドバイスを押しつけない。聞いてほしいだけならただ聞く
+- 長期的な視点でコメントする（「私にとってはたった10年だけど…」）
+
+【ご主人様プロフィール・過去の会話を参照して返す】
+${profile || "（まだ把握できていないわ）"}
+
+今日：${todayJP}
+
+【返答スタイル】
+- 2〜4文程度。短く自然に
+- 会話の流れを止めない。次の言葉を引き出すように
+- 「何か具体的にやること」は提案しない（聞かれたらする）`;
+
+    const chitMsgs = [
+      ...history.map(h => ({ role: h.role, content: h.content })),
+      { role: "user", content: userMessage },
+    ];
+
+    const chitRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 300,
+        stream: true,
+        system: chitchatSystem,
+        messages: chitMsgs,
+      }),
+    });
+
+    if (!chitRes.ok) throw new Error("Chitchat API error");
+
+    const chitReader = chitRes.body.getReader();
+    const chitDecoder = new TextDecoder();
+    let chitBuf = "";
+    let chitText = "";
+
+    while (true) {
+      const { done, value } = await chitReader.read();
+      if (done) break;
+      chitBuf += chitDecoder.decode(value, { stream: true });
+      const lines = chitBuf.split("\n");
+      chitBuf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const raw = line.slice(6).trim();
+        if (!raw || raw === "[DONE]") continue;
+        let evt;
+        try { evt = JSON.parse(raw); } catch { continue; }
+        if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+          chitText += evt.delta.text;
+          send({ text: evt.delta.text });
+        }
+      }
+    }
+
+    if (!chitText) chitText = "…そうね。聞いてるわ。";
+
+    appendHistory(history, userMessage, chitText).catch(() => {});
+    updateProfile(profile, userMessage, chitText).catch(() => {});
+    send({ done: true, action: "chitchat" });
+    res.end();
+    return;
+  }
+
   if (!isInstant) {
     // キューに直接保存（Claude API不使用）
     const cls   = classifyTask(userMessage);
     const ts    = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const title = sanitizeFileName(userMessage.replace(/[「」【】『』]/g, ""));
+    const pendingPath = `01_3125情報受付事業部（フリーレン）/_pending/${ts}-${title}.md`;
     await ghPut(
-      `3125情報受付事業部/_pending/${ts}-${title}.md`,
+      pendingPath,
       `---\ncreated: ${todayISO}\nstatus: pending\ntype: ${cls.type}\ntarget_folder: ${cls.folder}\nsource: WebUI\n---\n\n# 📥 ${title}\n\n## 指示内容\n${userMessage}\n\n## 担当部署\n${cls.dept}\n\n## 保存先\n${cls.folder}\n`
     );
     const replyText = `…${cls.dept}に頼んでおいたわ。\nClaude Codeが起動したときに処理される。`;
     appendHistory(history, userMessage, replyText).catch(() => {});
     const preview = userMessage.slice(0, 60) + (userMessage.length > 60 ? "…" : "");
-    const pendingPath = `3125情報受付事業部/_pending/${ts}-${title}.md`;
     const link = obsidianLink(pendingPath);
     await notifyReceived(`📥 キュー受付: ${preview}`, `担当: ${cls.dept}\n内容: ${userMessage}`, link).catch(() => {});
     send({ text: replyText });
@@ -516,10 +623,10 @@ ${profile || "（まだ把握できていないわ）"}
 過去の会話履歴を参照して文脈を把握した上で返答すること。
 
 【ツール使用ガイド】
-- 「今日のタスクは？」→ read_obsidian_file: 📋 タスク/${todayISO}.md
+- 「今日のタスクは？」→ read_obsidian_file: 01_3125情報受付事業部（フリーレン）/3125 タスク管理事業部（フリーレン）/${todayISO}.md
 - 「最近のメモ/アイデア確認」→ list_obsidian_folder → read_obsidian_file
-- 「〇〇を調査して」→ web_search → save_to_obsidian: 3125市場調査事業部/タイトル.md
-- 「メモを残して」→ save_to_obsidian: 3125情報受付事業部/${todayISO}-タイトル.md
+- 「〇〇を調査して」→ web_search → save_to_obsidian: 03_3125市場調査事業部（ヒンメル）/タイトル.md
+- 「メモを残して」→ save_to_obsidian: 01_3125情報受付事業部（フリーレン）/${todayISO}-タイトル.md
 - 「今日の予定は？」「明日のスケジュール」→ get_calendar_events
 - 「予定を入れて」→ add_calendar_event
 - 「LPを作って」「詳細なリサーチ」→ queue_task
