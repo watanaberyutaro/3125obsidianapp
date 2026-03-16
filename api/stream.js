@@ -245,6 +245,17 @@ const TOOLS = [
   }
 ];
 
+// ==================== ファイル名サニタイズ ====================
+
+function sanitizeFileName(name) {
+  return name
+    .replace(/[\r\n\t]/g, " ")          // 改行・タブ → スペース
+    .replace(/[\\/:*?"<>|]/g, "-")      // Android/Windows 禁止文字 → ハイフン
+    .replace(/\s+/g, " ")               // 連続スペース → 1つ
+    .trim()
+    .slice(0, 40);                       // 最大40文字
+}
+
 // ==================== Tool Executor ====================
 
 async function executeTool(name, input) {
@@ -279,7 +290,7 @@ async function executeTool(name, input) {
     }
     case "queue_task": {
       const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-      const path = `3125情報受付事業部/_pending/${ts}-${input.title}.md`;
+      const path = `3125情報受付事業部/_pending/${ts}-${sanitizeFileName(input.title)}.md`;
       await ghPut(path, `---\ncreated: ${today}\nstatus: pending\ntype: ${input.task_type}\ntarget_folder: ${input.target_folder}\n---\n\n# 📥 ${input.title}\n\n## 実行指示\n${input.instructions}\n\n## 保存先\n${input.target_folder}\n`);
       return `キューに追加: ${input.title}`;
     }
@@ -462,7 +473,7 @@ async function runAgentStream(userMessage, res) {
     // キューに直接保存（Claude API不使用）
     const cls   = classifyTask(userMessage);
     const ts    = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const title = userMessage.replace(/[「」【】『』]/g, "").slice(0, 30).trim();
+    const title = sanitizeFileName(userMessage.replace(/[「」【】『』]/g, ""));
     await ghPut(
       `3125情報受付事業部/_pending/${ts}-${title}.md`,
       `---\ncreated: ${todayISO}\nstatus: pending\ntype: ${cls.type}\ntarget_folder: ${cls.folder}\nsource: WebUI\n---\n\n# 📥 ${title}\n\n## 指示内容\n${userMessage}\n\n## 担当部署\n${cls.dept}\n\n## 保存先\n${cls.folder}\n`
