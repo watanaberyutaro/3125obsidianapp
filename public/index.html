@@ -498,23 +498,21 @@
         <div class="suggestion" onclick="suggest(this)">カレンダーに追加</div>
         <div class="suggestion" onclick="suggest(this)">メモを残して</div>
         <div class="suggestion" onclick="suggest(this)">市場調査して</div>
-        <div class="suggestion" onclick="suggest(this)">今日のタスクは？</div>
         <div class="suggestion" onclick="suggest(this)">今日の予定は？</div>
+        <div class="suggestion" onclick="suggest(this)">雑談して</div>
       </div>
     </div>
   </div>
 
   <div class="input-area">
     <div class="templates">
-      <div class="tpl" onclick="useTemplate(this)">💡 アイデアを保存</div>
-      <div class="tpl" onclick="useTemplate(this)">📋 タスクを追加</div>
-      <div class="tpl" onclick="useTemplate(this)">📅 カレンダーに追加</div>
-      <div class="tpl" onclick="useTemplate(this)">📝 メモを残して</div>
-      <div class="tpl" onclick="useTemplate(this)">🔍 市場調査して</div>
-      <div class="tpl" onclick="useTemplate(this)">✅ 今日のタスクは？</div>
-      <div class="tpl" onclick="useTemplate(this)">🗓 今日の予定は？</div>
-      <div class="tpl" onclick="useTemplate(this)">📊 提案書を作って</div>
-      <div class="tpl" onclick="useTemplate(this)">🤝 営業提案を考えて</div>
+      <div class="tpl" onclick="useTemplate(this)">アイデアを保存</div>
+      <div class="tpl" onclick="useTemplate(this)">タスクを追加</div>
+      <div class="tpl" onclick="useTemplate(this)">カレンダーに追加</div>
+      <div class="tpl" onclick="useTemplate(this)">メモを残して</div>
+      <div class="tpl" onclick="useTemplate(this)">市場調査して</div>
+      <div class="tpl" onclick="useTemplate(this)">今日の予定は？</div>
+      <div class="tpl" onclick="useTemplate(this)">雑談して</div>
     </div>
     <div class="input-row">
       <textarea id="input" placeholder="指示を入力（Shift+Enterで送信）..." rows="1"></textarea>
@@ -659,15 +657,13 @@
 
     function useTemplate(el) {
       const map = {
-        '💡 アイデアを保存': 'アイデア ',
-        '📋 タスクを追加': 'タスクを追加 ',
-        '📅 カレンダーに追加': 'カレンダーに追加 ',
-        '📝 メモを残して': 'メモ ',
-        '🔍 市場調査して': '市場調査 ',
-        '✅ 今日のタスクは？': '今日のタスクを確認して',
-        '🗓 今日の予定は？': '今日の予定を教えて',
-        '📊 提案書を作って': '提案書を作って ',
-        '🤝 営業提案を考えて': '営業提案を考えて ',
+        'アイデアを保存': 'アイデア ',
+        'タスクを追加': 'タスクを追加 ',
+        'カレンダーに追加': 'カレンダーに追加 ',
+        'メモを残して': 'メモ ',
+        '市場調査して': '市場調査 ',
+        '今日の予定は？': '今日の予定を教えて',
+        '雑談して': '雑談して ',
       };
       const val = map[el.textContent] || el.textContent;
       input.value = val;

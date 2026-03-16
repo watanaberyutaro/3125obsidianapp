@@ -460,6 +460,7 @@ async function notifyReceived(title, body, link) {
 // ==================== 雑談判定パターン ====================
 
 const CHITCHAT_PATTERNS = [
+  /^雑談して/,
   /^ねえ[、,　 ]?/,
   /^なあ[、,　 ]?/,
   /^ちょっと聞いて/,
