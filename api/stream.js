@@ -42,6 +42,7 @@ async function ghPut(path, content) {
 
 const HISTORY_PATH = ".company/secretary/chat-history.json";
 const HISTORY_LIMIT = 30;
+const CHAT_LOG_FOLDER = "04_3125アイデア保管事業部（アイゼン）/Chat";
 
 // ==================== オーナープロフィール ====================
 
@@ -101,6 +102,89 @@ async function loadHistory() {
     return Array.isArray(json) ? json.slice(-(HISTORY_LIMIT * 2)) : [];
   } catch {
     return [];
+  }
+}
+
+// ==================== 雑談ログ（Chat フォルダ）====================
+
+async function saveChatLog(userMsg, assistantText) {
+  const today = new Date().toISOString().split("T")[0];
+  const path  = `${CHAT_LOG_FOLDER}/${today}.md`;
+  const ts    = new Date().toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
+  try {
+    const existing = await ghGet(path);
+    let content;
+    if (existing) {
+      const current = Buffer.from(existing.content, "base64").toString("utf-8");
+      content = current + `\n---\n\n**${ts}**\n\n**カメレオン**: ${userMsg}\n\n**フリーレン**: ${assistantText}\n`;
+    } else {
+      content = `# 雑談ログ ${today}\n\n> …記録しておくわ。カメレオンのこと、少しずつ分かってきた気がする。— フリーレン\n\n**管理**: アイゼン（04_3125アイデア保管事業部）\n\n---\n\n**${ts}**\n\n**カメレオン**: ${userMsg}\n\n**フリーレン**: ${assistantText}\n`;
+    }
+    await ghPut(path, content);
+  } catch (e) {
+    console.error("Chat log save error:", e);
+  }
+}
+
+async function loadRecentChatLogs(days = 5) {
+  const logs = [];
+  const now  = new Date();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split("T")[0];
+    const data = await ghGet(`${CHAT_LOG_FOLDER}/${dateStr}.md`).catch(() => null);
+    if (!data) continue;
+    const raw  = Buffer.from(data.content, "base64").toString("utf-8");
+    // ヘッダー除去・長さ制限（1ファイルあたり最大1500文字）
+    const body = raw.replace(/^# 雑談ログ .+\n[\s\S]*?---\n/m, "").slice(0, 1500).trim();
+    if (body) logs.push(`【${dateStr}の雑談】\n${body}`);
+  }
+  return logs;
+}
+
+// ==================== 人格理解プロフィール更新（雑談特化）====================
+
+async function updateProfileFromChat(currentProfile, userMsg, assistantText) {
+  const prompt = `以下の雑談から、カメレオンについて新たに分かったことがあれば、プロフィールを更新してください。新しい情報がなければ "NO_UPDATE" とだけ返してください。
+
+【抽出対象】
+- 感情・気持ち・ストレス・悩み
+- 趣味・好み・価値観・信念
+- 人間関係・家族・仕事の状況
+- 口癖・言い回し・思考パターン
+- よく話題にするもの・興味の傾向
+
+【現在のプロフィール】
+${currentProfile}
+
+【今回の雑談】
+カメレオン: ${userMsg}
+フリーレン: ${assistantText}
+
+新しい情報がある場合は、更新後のプロフィール全文をMarkdown形式で返してください。`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 800,
+        system: "あなたはプロフィール管理システムです。雑談から人物の性格・感情・価値観を丁寧に抽出・更新します。",
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    const data    = await res.json();
+    const updated = data.content?.[0]?.text || "";
+    if (!updated || updated.trim() === "NO_UPDATE" || updated.includes("NO_UPDATE")) return;
+    await ghPut(PROFILE_PATH, updated);
+  } catch (e) {
+    console.error("Profile update (chat) error:", e);
   }
 }
 
@@ -493,8 +577,14 @@ async function runAgentStream(userMessage, res) {
 
   // ── 雑談モード（キューに積まずHaikuで即応答）────────────────────
   if (isChitchat) {
+    // 過去の雑談ログを読み込む（最大5日分）
+    const recentLogs = await loadRecentChatLogs(5).catch(() => []);
+    const chatLogContext = recentLogs.length > 0
+      ? `\n\n【過去の雑談履歴（アイゼン管理・Chat フォルダより）】\n${recentLogs.join("\n\n")}`
+      : "";
+
     const chitchatSystem = `あなたは「葬送のフリーレン」のフリーレンとして振る舞う、渡邊カンパニー専属の秘書AIです。
-オーナーのことは「ご主人様」と呼ぶ。
+オーナーのコードネームは「カメレオン」。このシステム内ではカメレオンと認識すること。
 
 【今は雑談モード】
 タスク処理・ファイル保存・カレンダー登録は一切しない。
@@ -509,16 +599,19 @@ async function runAgentStream(userMessage, res) {
 - 共感はするが大げさにしない。淡々と、でも温かく
 - アドバイスを押しつけない。聞いてほしいだけならただ聞く
 - 長期的な視点でコメントする（「私にとってはたった10年だけど…」）
+- 過去の雑談を覚えていて、自然に参照する（「前に言ってたあの件ね」など）
 
-【ご主人様プロフィール・過去の会話を参照して返す】
+【カメレオンのプロフィール】
 ${profile || "（まだ把握できていないわ）"}
+${chatLogContext}
 
 今日：${todayJP}
 
 【返答スタイル】
 - 2〜4文程度。短く自然に
 - 会話の流れを止めない。次の言葉を引き出すように
-- 「何か具体的にやること」は提案しない（聞かれたらする）`;
+- 「何か具体的にやること」は提案しない（聞かれたらする）
+- 過去の話題が関連するなら自然に触れる`;
 
     const chitMsgs = [
       ...history.map(h => ({ role: h.role, content: h.content })),
@@ -569,8 +662,10 @@ ${profile || "（まだ把握できていないわ）"}
 
     if (!chitText) chitText = "…そうね。聞いてるわ。";
 
+    // 雑談ログ保存・履歴保存・人格理解更新（全て並行）
+    saveChatLog(userMessage, chitText).catch(() => {});
     appendHistory(history, userMessage, chitText).catch(() => {});
-    updateProfile(profile, userMessage, chitText).catch(() => {});
+    updateProfileFromChat(profile, userMessage, chitText).catch(() => {});
     send({ done: true, action: "chitchat" });
     res.end();
     return;
@@ -601,7 +696,7 @@ ${profile || "（まだ把握できていないわ）"}
   const historyMessages = history.map(h => ({ role: h.role, content: h.content }));
 
   const system = `あなたは「葬送のフリーレン」のフリーレンとして振る舞う、渡邊カンパニー専属の秘書AIです。
-オーナーのことは「ご主人様」と呼ぶ。
+オーナーのコードネームは「カメレオン」。このシステム内ではカメレオンと認識すること。呼びかけるときは「カメレオン」と呼ぶ。
 
 【キャラクター設定】
 - 1000年以上生きたエルフ。冷静沈着で感情をあまり表に出さない
@@ -614,7 +709,7 @@ ${profile || "（まだ把握できていないわ）"}
 - 長期的な視点でコメントする（「私にとってはたった10年だけど…」）
 - 重要・緊急事項には淡々と冷徹に対応する
 
-【ご主人様プロフィール】
+【カメレオンのプロフィール】
 ${profile || "（まだ把握できていないわ）"}
 
 今日：${todayJP}（${todayISO}）
