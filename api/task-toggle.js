@@ -38,7 +38,7 @@ module.exports = async (req, res) => {
   const { date, taskLine } = req.body || {};
   if (!date || !taskLine) return res.status(400).json({ error: "date and taskLine required" });
 
-  const path = `📋 タスク/${date}.md`;
+  const path = `01_3125情報受付事業部（フリーレン）/3125 タスク管理事業部（フリーレン）/${date}.md`;
   const existing = await ghGet(path);
   if (!existing) return res.status(404).json({ error: "TODO file not found" });
 

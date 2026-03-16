@@ -525,12 +525,24 @@ async function runAgentStream(userMessage, res) {
     if (existing) {
       let body = Buffer.from(existing.content, "base64").toString("utf-8");
       const newLine = `- [ ] ${taskContent} | 優先度: 通常 | 追加: ${todayISO}`;
-      if (body.includes("（なし）\n\n---\n\n## ✅")) {
-        body = body.replace("（なし）\n\n---\n\n## ✅", `${newLine}\n\n---\n\n## ✅`);
-      } else if (body.includes("## 🟡 優先度: 通常\n\n（なし）")) {
+      if (body.includes("## 🟡 優先度: 通常\n\n（なし）")) {
         body = body.replace("## 🟡 優先度: 通常\n\n（なし）", `## 🟡 優先度: 通常\n\n${newLine}`);
-      } else {
+      } else if (body.includes("## 🟡 優先度: 通常\n")) {
         body = body.replace("## 🟡 優先度: 通常\n", `## 🟡 優先度: 通常\n${newLine}\n`);
+      } else if (body.includes("## ✅ 今日のタスク\n")) {
+        // CLAUDE.md形式: "今日のタスク" セクションに追加
+        body = body.replace("## ✅ 今日のタスク\n", `## ✅ 今日のタスク\n${newLine}\n`);
+      } else if (body.includes("## 🔄 持ち越し")) {
+        // CLAUDE.md形式: 持ち越しセクションの後に挿入（完了セクションの前）
+        const completedIdx = body.search(/\n## ✅/);
+        if (completedIdx !== -1) {
+          body = body.slice(0, completedIdx) + `\n${newLine}` + body.slice(completedIdx);
+        } else {
+          body += `\n${newLine}\n`;
+        }
+      } else {
+        // フォールバック: ファイル末尾に追加
+        body += `\n${newLine}\n`;
       }
       fileContent = body;
     } else {

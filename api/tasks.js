@@ -26,9 +26,9 @@ function parseTodoFile(content, date) {
   let currentSection = null;
 
   for (const line of content.split("\n")) {
-    if (line.includes("優先度: 高") && line.startsWith("#"))   { currentSection = "high";   continue; }
-    if (line.includes("優先度: 通常") && line.startsWith("#")) { currentSection = "normal"; continue; }
-    if (line.includes("本日完了") && line.startsWith("#"))     { currentSection = "done";   continue; }
+    if (line.includes("優先度: 高") && line.startsWith("#"))                          { currentSection = "high";   continue; }
+    if ((line.includes("優先度: 通常") || line.includes("今日のタスク") || line.includes("持ち越し")) && line.startsWith("#")) { currentSection = "normal"; continue; }
+    if ((line.includes("本日完了") || line.includes("今日完了")) && line.startsWith("#")) { currentSection = "done";   continue; }
 
     const taskMatch = line.match(/^- \[([ x])\] (.+)/);
     if (!taskMatch || !currentSection) continue;
@@ -85,7 +85,7 @@ module.exports = async (req, res) => {
   if (req.method !== "GET") return res.status(405).json({ error: "GET only" });
 
   const date = req.query?.date || new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
-  const path = `📋 タスク/${date}.md`;
+  const path = `01_3125情報受付事業部（フリーレン）/3125 タスク管理事業部（フリーレン）/${date}.md`;
 
   const data = await ghGet(path);
   if (!data) return res.status(200).json(emptyData(date));
