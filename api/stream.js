@@ -2,10 +2,14 @@ const crypto = require("crypto");
 
 // ==================== GitHub API ====================
 
+function encodePath(p) {
+  return p.split("/").map(s => encodeURIComponent(s)).join("/");
+}
+
 async function ghGet(path) {
   const { GITHUB_TOKEN: t, GITHUB_OWNER: o, GITHUB_REPO: r } = process.env;
   const res = await fetch(
-    `https://api.github.com/repos/${o}/${r}/contents/${encodeURIComponent(path)}`,
+    `https://api.github.com/repos/${o}/${r}/contents/${encodePath(path)}`,
     { headers: { Authorization: `token ${t}`, Accept: "application/vnd.github.v3+json" } }
   );
   if (!res.ok) return null;
@@ -15,7 +19,7 @@ async function ghGet(path) {
 async function ghList(folder) {
   const { GITHUB_TOKEN: t, GITHUB_OWNER: o, GITHUB_REPO: r } = process.env;
   const res = await fetch(
-    `https://api.github.com/repos/${o}/${r}/contents/${encodeURIComponent(folder)}`,
+    `https://api.github.com/repos/${o}/${r}/contents/${encodePath(folder)}`,
     { headers: { Authorization: `token ${t}`, Accept: "application/vnd.github.v3+json" } }
   );
   if (!res.ok) return [];
@@ -25,7 +29,7 @@ async function ghList(folder) {
 
 async function ghPut(path, content) {
   const { GITHUB_TOKEN: t, GITHUB_OWNER: o, GITHUB_REPO: r } = process.env;
-  const url = `https://api.github.com/repos/${o}/${r}/contents/${encodeURIComponent(path)}`;
+  const url = `https://api.github.com/repos/${o}/${r}/contents/${encodePath(path)}`;
   let sha;
   try {
     const existing = await ghGet(path);
@@ -499,7 +503,7 @@ function classifyTask(msg) {
 
 // ==================== Streaming Agent ====================
 
-async function runAgentStream(userMessage, res) {
+async function runAgentStream(userMessage, res, opts = {}) {
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
 
   const todayISO = new Date().toISOString().split("T")[0];
@@ -514,7 +518,7 @@ async function runAgentStream(userMessage, res) {
   const isTaskRead     = /タスク|todo|やること/.test(lower) && /教えて|確認|見せて|一覧|ある|は/.test(lower);
   const isTaskAdd      = /^タスクを?追加|^todo追加|^タスク追加/i.test(userMessage.trim());
   const isInstant      = isCalendarAdd || isCalendarRead || isTaskRead;
-  const isChitchat     = CHITCHAT_PATTERNS.some(p => p.test(userMessage.trim()));
+  const isChitchat     = opts.forceChitchat || CHITCHAT_PATTERNS.some(p => p.test(userMessage.trim()));
 
   // ── タスク追加：即時TODOファイルに書き込む ──────────────────────
   if (isTaskAdd) {
@@ -675,9 +679,12 @@ ${chatLogContext}
 
     if (!chitText) chitText = "…そうね。聞いてるわ。";
 
-    // 雑談ログ保存・履歴保存・人格理解更新（全て並行）
-    saveChatLog(userMessage, chitText).catch(() => {});
-    appendHistory(history, userMessage, chitText).catch(() => {});
+    // 雑談ログ・履歴は await で確実に保存（Vercel が res.end() 後に終了するため）
+    await Promise.all([
+      saveChatLog(userMessage, chitText).catch(() => {}),
+      appendHistory(history, userMessage, chitText).catch(() => {}),
+    ]);
+    // プロフィール更新は低優先度なので fire-and-forget
     updateProfileFromChat(profile, userMessage, chitText).catch(() => {});
     send({ done: true, action: "chitchat" });
     res.end();
@@ -894,7 +901,7 @@ module.exports = async (req, res) => {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
 
-  const { message } = req.body;
+  const { message, chitchat } = req.body;
   if (!message) return res.status(400).json({ error: "message required" });
 
   // SSE headers
@@ -903,7 +910,7 @@ module.exports = async (req, res) => {
   res.setHeader("X-Accel-Buffering", "no");
 
   try {
-    await runAgentStream(message, res);
+    await runAgentStream(message, res, { forceChitchat: !!chitchat });
   } catch (err) {
     console.error("Stream error:", err);
     res.write(`data: ${JSON.stringify({ text: "…エラーが出たわ。もう一度試してみて。", done: true, action: "none" })}\n\n`);
