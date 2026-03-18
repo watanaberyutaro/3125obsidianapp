@@ -514,10 +514,13 @@ async function runAgentStream(userMessage, res, opts = {}) {
   const [history, profile] = await Promise.all([loadHistory(), loadProfile()]);
   const lower   = userMessage.toLowerCase();
 
+  // ── キュー系テンプレートの先行判定（即時処理より優先）──────────────
+  const isQueueTemplate = /^(アイデア|市場調査|メモ|議事録)\s/i.test(userMessage.trim());
+
   // ── 即時処理かキューかを判定 ──────────────────────────────────
-  const isCalendarAdd  = /予定|カレンダー|会議|ミーティング/.test(userMessage) && /追加|入れて|登録|作って/.test(userMessage);
-  const isCalendarRead = /予定|スケジュール/.test(userMessage) && /は|教えて|確認|見せて/.test(userMessage) && !isCalendarAdd;
-  const isTaskRead     = /タスク|todo|やること/.test(lower) && /教えて|確認|見せて|一覧|ある|は/.test(lower);
+  const isCalendarAdd  = !isQueueTemplate && /予定|カレンダー|会議|ミーティング/.test(userMessage) && /追加|入れて|登録|作って/.test(userMessage);
+  const isCalendarRead = !isQueueTemplate && /予定|スケジュール/.test(userMessage) && /は？$|教えて|確認|見せて/.test(userMessage) && !isCalendarAdd;
+  const isTaskRead     = !isQueueTemplate && /タスク|todo/i.test(lower) && /教えて|確認|見せて|一覧/.test(lower);
   const isTaskAdd      = /^タスクを?追加|^todo追加|^タスク追加/i.test(userMessage.trim());
   const isInstant      = isCalendarAdd || isCalendarRead || isTaskRead;
   const isChitchat     = opts.forceChitchat || CHITCHAT_PATTERNS.some(p => p.test(userMessage.trim()));
