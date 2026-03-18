@@ -486,6 +486,8 @@ const CHITCHAT_PATTERNS = [
 function classifyTask(msg) {
   if (CHITCHAT_PATTERNS.some(p => p.test(msg.trim())))
     return { type: "chitchat", dept: "秘書室", folder: null };
+  if (/^議事録/.test(msg.trim()))
+    return { type: "minutes",           dept: "アイデア保管部（アイゼン）", folder: "04_3125アイデア保管事業部（アイゼン）/minutes" };
   if (/調査|リサーチ|市場|競合|分析|調べて|トレンド|まとめて/.test(msg))
     return { type: "research",         dept: "市場調査部（ヒンメル）",   folder: "03_3125市場調査事業部（ヒンメル）" };
   if (/LP|ランディング|コンテンツ|記事|ブログ|SNS|広告|マーケ/.test(msg))
@@ -519,6 +521,24 @@ async function runAgentStream(userMessage, res, opts = {}) {
   const isTaskAdd      = /^タスクを?追加|^todo追加|^タスク追加/i.test(userMessage.trim());
   const isInstant      = isCalendarAdd || isCalendarRead || isTaskRead;
   const isChitchat     = opts.forceChitchat || CHITCHAT_PATTERNS.some(p => p.test(userMessage.trim()));
+
+  // ── 議事録：キューに保存（アイゼンが要約処理）──────────────────────
+  if (opts.minutes) {
+    const ts    = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const title = sanitizeFileName(opts.minutesTitle || "議事録");
+    const pendingPath = `01_3125情報受付事業部（フリーレン）/_pending/${ts}-議事録 ${title}.md`;
+    await ghPut(
+      pendingPath,
+      `---\ncreated: ${todayISO}\nstatus: pending\ntype: minutes\ntarget_folder: 04_3125アイデア保管事業部（アイゼン）/minutes\nsource: WebUI\n---\n\n# 📝 議事録: ${opts.minutesTitle || title}\n\n## 文字起こしデータ\n${userMessage.replace(/^議事録\s*[^\n]*\n*/, "")}\n\n## 担当部署\nアイデア保管部（アイゼン）\n\n## 保存先\n04_3125アイデア保管事業部（アイゼン）/minutes\n`
+    );
+    const link = obsidianLink(pendingPath);
+    await notifyReceived(`📝 議事録受付: ${opts.minutesTitle || title}`, `アイゼンが要約して保管します`, link).catch(() => {});
+    appendHistory(history, `議事録: ${opts.minutesTitle}`, "…アイゼンに渡しておいた。Claude Codeが起動したら要約されるわ。").catch(() => {});
+    send({ text: `…議事録「${opts.minutesTitle || title}」を受け取ったわ。\nアイゼンに渡しておいた。Claude Codeが起動したら要約されるわ。` });
+    send({ done: true, action: "queued" });
+    res.end();
+    return;
+  }
 
   // ── タスク追加：即時TODOファイルに書き込む ──────────────────────
   if (isTaskAdd) {
@@ -901,7 +921,7 @@ module.exports = async (req, res) => {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
 
-  const { message, chitchat } = req.body;
+  const { message, chitchat, minutes, minutesTitle } = req.body;
   if (!message) return res.status(400).json({ error: "message required" });
 
   // SSE headers
@@ -910,7 +930,7 @@ module.exports = async (req, res) => {
   res.setHeader("X-Accel-Buffering", "no");
 
   try {
-    await runAgentStream(message, res, { forceChitchat: !!chitchat });
+    await runAgentStream(message, res, { forceChitchat: !!chitchat, minutes: !!minutes, minutesTitle });
   } catch (err) {
     console.error("Stream error:", err);
     res.write(`data: ${JSON.stringify({ text: "…エラーが出たわ。もう一度試してみて。", done: true, action: "none" })}\n\n`);

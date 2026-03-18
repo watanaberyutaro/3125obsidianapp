@@ -219,6 +219,92 @@
     .tpl:hover { border-color: #3a3a3a; color: #aaa; }
     .tpl:active { background: #1a1a1a; }
 
+    /* 議事録モーダル */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 520px;
+      max-height: 85dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #1e1e1e;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h3 { font-size: 15px; color: #ccc; }
+    .modal-close {
+      background: none; border: none;
+      color: #555; font-size: 20px; cursor: pointer;
+    }
+    .modal-close:hover { color: #aaa; }
+    .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+    .modal-field { margin-bottom: 14px; }
+    .modal-field label {
+      display: block; font-size: 12px;
+      color: #666; margin-bottom: 6px;
+    }
+    .modal-field input,
+    .modal-field textarea {
+      width: 100%;
+      background: #0a0a0a;
+      border: 1px solid #222;
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: #e0e0e0;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .modal-field input:focus,
+    .modal-field textarea:focus { border-color: #444; }
+    .modal-field textarea {
+      min-height: 200px;
+      resize: vertical;
+    }
+    .modal-footer {
+      padding: 12px 20px;
+      border-top: 1px solid #1e1e1e;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .modal-btn {
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 13px;
+      cursor: pointer;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #aaa;
+      transition: all 0.15s;
+    }
+    .modal-btn:hover { border-color: #555; color: #ccc; }
+    .modal-btn.primary {
+      background: #222;
+      border-color: #444;
+      color: #e0e0e0;
+    }
+    .modal-btn.primary:hover { background: #2a2a2a; }
+    .modal-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
     .input-area {
       position: fixed;
       bottom: 0;
@@ -567,12 +653,37 @@
       <div class="tpl" onclick="useTemplate(this)">市場調査して</div>
       <div class="tpl" onclick="useTemplate(this)">今日の予定は？</div>
       <div class="tpl" onclick="useTemplate(this)">雑談して</div>
+      <div class="tpl" onclick="openMinutesModal()">議事録</div>
     </div>
     <div class="input-row">
       <textarea id="input" placeholder="指示を入力（Shift+Enterで送信）..." rows="1"></textarea>
       <button id="sendBtn" onclick="send()">
         <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
       </button>
+    </div>
+  </div>
+
+  <!-- 議事録モーダル -->
+  <div class="modal-overlay" id="minutesModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>📝 議事録を登録</h3>
+        <button class="modal-close" onclick="closeMinutesModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-field">
+          <label>タイトル</label>
+          <input type="text" id="minutesTitle" placeholder="例: バリューコミュニケーションズ商談 3/18">
+        </div>
+        <div class="modal-field">
+          <label>内容（文字起こしテキストを貼り付け）</label>
+          <textarea id="minutesContent" placeholder="録音の文字起こしテキストをここに貼り付けてください..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn" onclick="closeMinutesModal()">キャンセル</button>
+        <button class="modal-btn primary" id="minutesSendBtn" onclick="sendMinutes()">送信</button>
+      </div>
     </div>
   </div>
 
@@ -759,6 +870,86 @@
       input.style.height = Math.min(input.scrollHeight, 120) + 'px';
       input.focus();
       input.setSelectionRange(input.value.length, input.value.length);
+    }
+
+    function openMinutesModal() {
+      document.getElementById('minutesModal').classList.add('active');
+      document.getElementById('minutesTitle').value = '';
+      document.getElementById('minutesContent').value = '';
+      document.getElementById('minutesTitle').focus();
+    }
+
+    function closeMinutesModal() {
+      document.getElementById('minutesModal').classList.remove('active');
+    }
+
+    async function sendMinutes() {
+      const title = document.getElementById('minutesTitle').value.trim();
+      const content = document.getElementById('minutesContent').value.trim();
+      if (!title || !content) return;
+
+      const btn = document.getElementById('minutesSendBtn');
+      btn.disabled = true;
+      btn.textContent = '送信中...';
+
+      closeMinutesModal();
+      addMessage('user', `📝 議事録: ${title}`);
+      showTyping();
+
+      try {
+        const res = await fetch('/api/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: `議事録 ${title}\n\n${content}`, minutes: true, minutesTitle: title })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        let fullText = '';
+        let bubbleEl = null;
+        let divEl = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = JSON.parse(line.slice(6));
+            if (data.text) {
+              if (!bubbleEl) {
+                removeTyping();
+                const m = addMessage('assistant', '', null);
+                bubbleEl = m.bubble;
+                divEl = m.div;
+              }
+              fullText += data.text;
+              bubbleEl.textContent = fullText;
+              messages.scrollTop = messages.scrollHeight;
+            }
+            if (data.done) {
+              removeTyping();
+              if (!bubbleEl) addMessage('assistant', fullText || '…キューに追加したわ。', badgeLabel(data.action));
+              else if (data.action) {
+                const b = document.createElement('span');
+                b.className = 'badge';
+                b.textContent = badgeLabel(data.action) || '';
+                if (b.textContent) divEl.appendChild(b);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        removeTyping();
+        addMessage('assistant', '…通信エラーね。もう一度試して。');
+      }
+
+      btn.disabled = false;
+      btn.textContent = '送信';
     }
 
     function addMessage(role, text, badgeLabel) {
