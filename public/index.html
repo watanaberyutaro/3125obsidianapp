@@ -971,19 +971,19 @@
               if (data.text) {
                 fullText += data.text;
                 if (!bubbleEl) {
-                  hideTyping();
+                  removeTyping();
                   bubbleEl = addMessage('assistant', '');
                   divEl = bubbleEl.querySelector('div');
                 }
                 divEl.innerHTML = marked.parse(fullText);
               }
-              if (data.done) hideTyping();
+              if (data.done) removeTyping();
             } catch {}
           }
         }
-        if (!bubbleEl) { hideTyping(); addMessage('assistant', fullText || '週報を受け付けたよ。'); }
+        if (!bubbleEl) { removeTyping(); addMessage('assistant', fullText || '週報を受け付けたよ。'); }
       } catch (e) {
-        hideTyping();
+        removeTyping();
         addMessage('assistant', '…エラーが発生したわ。もう一度試してみて。');
       } finally {
         btn.disabled = false;
