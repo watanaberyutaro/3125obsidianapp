@@ -543,6 +543,52 @@ async function runAgentStream(userMessage, res, opts = {}) {
     return;
   }
 
+  // ── 週報提出：フェルンの weekly-meeting に保存 ──────────────────────
+  if (opts.weekly) {
+    const weekLabel = sanitizeFileName(opts.weeklyTitle || "週報");
+    // ISO週番号を抽出（例: 2026-W14）
+    const weekMatch = (opts.weeklyTitle || "").match(/(\d{4}-W\d{2})/);
+    const weekId = weekMatch ? weekMatch[1] : todayISO;
+    const weeklyPath = `02_3125経営日誌事業部（フェルン）/weekly-meeting/${weekId}.md`;
+    const rawContent = userMessage.replace(/^週報\s*[^\n]*\n*/, "");
+    const fileContent = [
+      "---",
+      `date: "${todayISO}"`,
+      `week: "${weekId}"`,
+      `type: weekly_report`,
+      `status: raw`,
+      `source: WebUI`,
+      "---",
+      "",
+      `# 週報 ${opts.weeklyTitle || weekId}`,
+      "",
+      "## 文字起こしデータ（原文）",
+      "",
+      rawContent,
+      "",
+      "---",
+      "",
+      "## 📋 役員共有用サマリー（コピペ用）",
+      "",
+      "> ※ Claude Code 起動時にフェルンが構造化・サマリー生成します",
+      "",
+      "---",
+      "",
+      "## 詳細（社内管理用）",
+      "",
+      "> ※ Claude Code 起動時にフェルンが分析・アクションアイテム整理します",
+      "",
+    ].join("\n");
+    await ghPut(weeklyPath, fileContent);
+    const link = obsidianLink(weeklyPath);
+    await notifyReceived(`📊 週報受付: ${opts.weeklyTitle || weekId}`, `フェルンが構造化して保管します`, link).catch(() => {});
+    appendHistory(history, `週報提出: ${opts.weeklyTitle}`, "…フェルンに渡しておいた。Claude Codeが起動したら構造化されるわ。").catch(() => {});
+    send({ text: `…週報「${opts.weeklyTitle || weekId}」を受け取ったわ。\nフェルンに渡しておいた。Claude Codeが起動したら構造化されるわ。\n\n保存先: \`weekly-meeting/${weekId}.md\`` });
+    send({ done: true, action: "queued" });
+    res.end();
+    return;
+  }
+
   // ── タスク追加：即時TODOファイルに書き込む ──────────────────────
   if (isTaskAdd) {
     const taskContent = userMessage.replace(/^タスクを?追加\s*/i, "").replace(/^todo追加\s*/i, "").replace(/^タスク追加\s*/i, "").trim() || userMessage;
@@ -924,7 +970,7 @@ module.exports = async (req, res) => {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
 
-  const { message, chitchat, minutes, minutesTitle } = req.body;
+  const { message, chitchat, minutes, minutesTitle, weekly, weeklyTitle } = req.body;
   if (!message) return res.status(400).json({ error: "message required" });
 
   // SSE headers

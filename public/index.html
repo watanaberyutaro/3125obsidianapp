@@ -654,6 +654,7 @@
       <div class="tpl" onclick="useTemplate(this)">今日の予定は？</div>
       <div class="tpl" onclick="useTemplate(this)">雑談して</div>
       <div class="tpl" onclick="openMinutesModal()">議事録</div>
+      <div class="tpl" onclick="openWeeklyModal()">週報提出</div>
     </div>
     <div class="input-row">
       <textarea id="input" placeholder="指示を入力（Shift+Enterで送信）..." rows="1"></textarea>
@@ -683,6 +684,30 @@
       <div class="modal-footer">
         <button class="modal-btn" onclick="closeMinutesModal()">キャンセル</button>
         <button class="modal-btn primary" id="minutesSendBtn" onclick="sendMinutes()">送信</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 週報モーダル -->
+  <div class="modal-overlay" id="weeklyModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>📊 週報を提出</h3>
+        <button class="modal-close" onclick="closeWeeklyModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-field">
+          <label>対象週（自動入力）</label>
+          <input type="text" id="weeklyWeek" readonly>
+        </div>
+        <div class="modal-field">
+          <label>会議内容（文字起こし・要約テキストを貼り付け）</label>
+          <textarea id="weeklyContent" placeholder="音声の文字起こし・要約テキストをここに貼り付けてください...&#10;&#10;■ 各自の行動と結果&#10;■ 変更点・改善点&#10;■ イベント状況&#10;■ スタッフの状況&#10;■ 営業関連"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn" onclick="closeWeeklyModal()">キャンセル</button>
+        <button class="modal-btn primary" id="weeklySendBtn" onclick="sendWeekly()">提出</button>
       </div>
     </div>
   </div>
@@ -881,6 +906,89 @@
 
     function closeMinutesModal() {
       document.getElementById('minutesModal').classList.remove('active');
+    }
+
+    function openWeeklyModal() {
+      document.getElementById('weeklyModal').classList.add('active');
+      // 今週のISO週番号を自動計算
+      const now = new Date();
+      const jan1 = new Date(now.getFullYear(), 0, 1);
+      const days = Math.floor((now - jan1) / 86400000);
+      const weekNum = Math.ceil((days + jan1.getDay() + 1) / 7);
+      const weekStr = `${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+      // 週の月曜〜日曜を計算
+      const day = now.getDay() || 7;
+      const mon = new Date(now); mon.setDate(now.getDate() - day + 1);
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      const fmt = d => `${d.getMonth()+1}/${d.getDate()}`;
+      document.getElementById('weeklyWeek').value = `${weekStr}（${fmt(mon)}〜${fmt(sun)}）`;
+      document.getElementById('weeklyContent').value = '';
+      document.getElementById('weeklyContent').focus();
+    }
+
+    function closeWeeklyModal() {
+      document.getElementById('weeklyModal').classList.remove('active');
+    }
+
+    async function sendWeekly() {
+      const week = document.getElementById('weeklyWeek').value.trim();
+      const content = document.getElementById('weeklyContent').value.trim();
+      if (!content) return;
+
+      const btn = document.getElementById('weeklySendBtn');
+      btn.disabled = true;
+      btn.textContent = '提出中...';
+
+      closeWeeklyModal();
+      addMessage('user', `📊 週報提出: ${week}`);
+      showTyping();
+
+      try {
+        const res = await fetch('/api/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: `週報 ${week}\n\n${content}`, weekly: true, weeklyTitle: week })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        let fullText = '';
+        let bubbleEl = null;
+        let divEl = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let lines = buf.split('\n');
+          buf = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.text) {
+                fullText += data.text;
+                if (!bubbleEl) {
+                  hideTyping();
+                  bubbleEl = addMessage('assistant', '');
+                  divEl = bubbleEl.querySelector('div');
+                }
+                divEl.innerHTML = marked.parse(fullText);
+              }
+              if (data.done) hideTyping();
+            } catch {}
+          }
+        }
+        if (!bubbleEl) { hideTyping(); addMessage('assistant', fullText || '週報を受け付けたよ。'); }
+      } catch (e) {
+        hideTyping();
+        addMessage('assistant', '…エラーが発生したわ。もう一度試してみて。');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '提出';
+      }
     }
 
     async function sendMinutes() {
