@@ -979,7 +979,7 @@ module.exports = async (req, res) => {
   res.setHeader("X-Accel-Buffering", "no");
 
   try {
-    await runAgentStream(message, res, { forceChitchat: !!chitchat, minutes: !!minutes, minutesTitle });
+    await runAgentStream(message, res, { forceChitchat: !!chitchat, minutes: !!minutes, minutesTitle, weekly: !!weekly, weeklyTitle });
   } catch (err) {
     console.error("Stream error:", err);
     res.write(`data: ${JSON.stringify({ text: "…エラーが出たわ。もう一度試してみて。", done: true, action: "none" })}\n\n`);
